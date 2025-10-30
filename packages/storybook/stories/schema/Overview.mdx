@@ -1,0 +1,144 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Schema/Overview" />
+
+# Schema 包概述
+
+`@schema-component/schema` 是 Schema Component 的核心包，提供强大的 Schema 定义和验证功能。
+
+## 核心概念
+
+### Schema 定义
+
+Schema 是数据模型的蓝图，定义了：
+
+- **字段类型**: 基础字段和关联字段
+- **验证规则**: 数据验证逻辑
+- **关系定义**: 模型间的关联关系
+- **类型推导**: 自动的 TypeScript 类型
+
+### 字段类型
+
+#### 基础字段 (8 种)
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| **String** | 字符串 | `field.string()` |
+| **Number** | 数值 | `field.integer()`, `field.float()` |
+| **Boolean** | 布尔值 | `field.boolean()` |
+| **Date** | 日期时间 | `field.date()`, `field.timestamp()` |
+| **Enum** | 枚举 | `field.enum({ values: [...] })` |
+| **JSON** | JSON 对象 | `field.json()` |
+| **Array** | 数组 | `field.array({ items: ... })` |
+| **Binary** | 二进制 | `field.binary()` |
+
+#### 关联字段 (4 种)
+
+| 关系 | 说明 | 示例 |
+|------|------|------|
+| **One-to-One** | 一对一 | `relation.one('Profile')` |
+| **One-to-Many** | 一对多 | `relation.many('Post')` |
+| **Many-to-One** | 多对一 | `relation.belongsTo('User')` |
+| **Many-to-Many** | 多对多 | `relation.manyToMany('Tag')` |
+
+## 快速示例
+
+### 定义 User Schema
+
+```typescript
+import { defineSchema, field, relation } from '@schema-component/schema'
+
+const UserSchema = defineSchema('User', {
+  id: field.uuid({ primary: true }),
+  username: field.string({ required: true, unique: true }),
+  email: field.email({ required: true, unique: true }),
+  age: field.integer({ min: 0, max: 150 }),
+  status: field.enum({
+    values: ['active', 'inactive', 'banned'] as const,
+    default: 'active'
+  }),
+
+  // 时间戳
+  createdAt: field.timestamp({ autoCreate: true }),
+  updatedAt: field.timestamp({ autoUpdate: true }),
+
+  // 关联
+  profile: relation.one('Profile'),
+  posts: relation.many('Post', { foreignKey: 'authorId' })
+})
+```
+
+### 验证数据
+
+```typescript
+const result = UserSchema.safeParse({
+  username: 'john_doe',
+  email: 'john@example.com',
+  age: 25
+})
+
+if (result.success) {
+  console.log(result.data) // 类型安全的数据
+} else {
+  console.error(result.errors) // 验证错误
+}
+```
+
+### 类型推导
+
+```typescript
+import { Infer } from '@schema-component/schema'
+
+type User = Infer<typeof UserSchema>
+// 自动推导为:
+// {
+//   id: string
+//   username: string
+//   email: string
+//   age?: number
+//   status?: 'active' | 'inactive' | 'banned'
+//   createdAt: Date
+//   updatedAt: Date
+//   profile?: Profile
+//   posts?: Post[]
+// }
+```
+
+## 核心特性
+
+### 🔒 类型安全
+
+完整的 TypeScript 类型推导，编译时类型检查。
+
+### ✅ 强大验证
+
+基于 Zod 的验证系统，支持同步/异步验证。
+
+### 🔗 关联关系
+
+支持所有常见的数据库关系类型。
+
+### 🎯 灵活配置
+
+通过 `withOption` 函数灵活配置字段选项。
+
+### 📦 标准兼容
+
+支持导出为 JSON Schema、OpenAPI、Prisma 等标准格式。
+
+## 深入学习
+
+探索更多内容：
+
+- [Basic Fields](/?path=/docs/schema-basic-fields--docs) - 基础字段详解
+- [Relation Fields](/?path=/docs/schema-relation-fields--docs) - 关联字段详解
+- [Validation](/?path=/docs/schema-validation--docs) - 验证系统
+- [Type Inference](/?path=/docs/schema-type-inference--docs) - 类型推导
+
+## API 参考
+
+查看完整的 [Schema API 文档](/?path=/docs/api-schema-api--docs)。
+
+---
+
+**技术栈**: 基于 Zod 构建，提供成熟稳定的验证功能。
