@@ -22,6 +22,114 @@
 | Schema 验证 | @schema-component/schema | 复用现有的 Schema 系统 |
 | 事件系统 | EventEmitter3 | 轻量级，性能好，API 简单 |
 
+## 设计理念
+
+### 函数式优先（Function-First）
+
+Engine 采用**函数式优先**的设计理念，核心配置使用**可执行函数**而非静态配置对象：
+
+#### 1. **APIs 是可执行函数**
+
+```typescript
+// ❌ 旧方式：配置对象
+apis: {
+  getList: {
+    url: '/api/users',
+    method: 'GET'
+  }
+}
+
+// ✅ 新方式：可执行函数
+apis: {
+  getList: async (params) => {
+    const response = await httpClient.get('/api/users', { params })
+    return {
+      data: response.data.users,
+      total: response.data.total
+    }
+  }
+}
+
+// 使用：直接调用函数
+const users = await UserModel.apis.getList({ page: 1, pageSize: 10 })
+```
+
+**优势：**
+- ✅ 直接可调用，无需额外的执行器
+- ✅ 完全的自定义能力（数据转换、错误处理等）
+- ✅ 支持复杂逻辑和条件判断
+- ✅ 更好的类型推导
+
+#### 2. **Actions 是可执行函数**
+
+```typescript
+// ❌ 旧方式：配置对象
+actions: {
+  activate: {
+    type: 'server',
+    method: 'activate'
+  }
+}
+
+// ✅ 新方式：可执行函数，可访问 context
+actions: (context) => ({
+  activate: async (params) => {
+    const { id } = params
+    const result = await context.repository.updateOne(id, { isActive: true })
+    context.eventBus.emit('user:activated', { id })
+    return result
+  }
+})
+
+// 使用：直接调用函数
+await UserModel.actions.activate({ id: 'user-123' })
+```
+
+**优势：**
+- ✅ 直接可调用
+- ✅ 可访问 context（repository、eventBus 等）
+- ✅ 支持复杂的业务逻辑编排
+- ✅ 更好的可测试性
+
+#### 3. **Views 是函数返回配置**
+
+```typescript
+// ✅ 函数形式，可根据 context 动态生成
+views: (context) => ({
+  list: {
+    type: 'list',
+    columns: [
+      { field: 'email', label: 'Email' },
+      { field: 'name', label: 'Name' },
+      // 根据权限动态显示列
+      ...(context.hasPermission('admin') ? [
+        { field: 'role', label: 'Role' }
+      ] : [])
+    ]
+  }
+})
+
+// 使用：调用函数获取配置
+const viewConfigs = UserModel.views(context)
+const listView = viewConfigs.list
+```
+
+**优势：**
+- ✅ 支持动态配置（根据权限、状态等）
+- ✅ 配置仍保持声明式
+- ✅ 灵活性和可维护性兼顾
+
+### 对比总结
+
+| 特性 | 配置对象方式 | 函数式方式 |
+|------|------------|-----------|
+| **可执行性** | 需要额外执行器 | ✅ 直接可调用 |
+| **灵活性** | 受限于配置结构 | ✅ 完全自定义 |
+| **上下文访问** | 难以访问 | ✅ 通过参数访问 |
+| **类型安全** | 配置类型 | ✅ 函数签名类型 |
+| **可测试性** | 需要模拟执行器 | ✅ 直接测试函数 |
+| **学习曲线** | 需要学习配置结构 | ✅ 符合直觉 |
+
 ## 架构设计
 
 ### 整体架构图
@@ -108,28 +216,21 @@ interface ModelDefinition {
   // Schema 定义（字段）
   schema: SchemaDefinition
 
-  // 视图定义
-  views?: {
-    list?: ViewConfig
-    form?: ViewConfig
-    kanban?: ViewConfig
-    calendar?: ViewConfig
-    [key: string]: ViewConfig | undefined
-  }
+  // 视图定义函数
+  views?: (context: ModelContext) => ViewDefinitions
 
-  // 动作定义
-  actions?: {
-    [actionName: string]: ActionConfig
-  }
+  // 动作定义函数
+  actions?: (context: ModelContext) => ActionDefinitions
 
-  // API 配置（数据访问配置）
+  // API 定义（可执行函数）
   apis?: {
-    getList?: ApiConfig
-    getOne?: ApiConfig
-    createOne?: ApiConfig
-    updateOne?: ApiConfig
-    deleteOne?: ApiConfig
-    [customApi: string]: ApiConfig | undefined
+    getList?: (params: GetListParams) => Promise<GetListResult>
+    getOne?: (id: string | number) => Promise<any>
+    createOne?: (data: any) => Promise<any>
+    updateOne?: (id: string | number, data: any) => Promise<any>
+    deleteOne?: (id: string | number) => Promise<boolean>
+    // 自定义 API 方法
+    [customApi: string]: ((...args: any[]) => Promise<any>) | undefined
   }
 
   // 生命周期钩子
@@ -160,19 +261,84 @@ interface ModelDefinition {
   }
 }
 
+// Model 上下文
+interface ModelContext {
+  modelName: string
+  schema: SchemaDefinition
+  repository: IRepository
+  eventBus: EventBus
+}
+
+// 视图定义类型
+interface ViewDefinitions {
+  list?: ViewConfig
+  form?: ViewConfig
+  kanban?: ViewConfig
+  calendar?: ViewConfig
+  [key: string]: ViewConfig | undefined
+}
+
+// 动作定义类型
+interface ActionDefinitions {
+  [actionName: string]: (params?: any) => Promise<any>
+}
+
 // defineModel 函数 - 统一定义入口
 function defineModel(definition: ModelDefinition): IModel {
+  // 创建 Model Context
+  const context: ModelContext = {
+    modelName: definition.name,
+    schema: definition.schema,
+    repository: createRepository(definition),
+    eventBus: getEventBus()
+  }
+
+  // 初始化 views（如果是函数则调用）
+  const views = typeof definition.views === 'function'
+    ? definition.views(context)
+    : definition.views || {}
+
+  // 初始化 actions（如果是函数则调用）
+  const actions = typeof definition.actions === 'function'
+    ? definition.actions(context)
+    : definition.actions || {}
+
   return {
     name: definition.name,
     schema: definition.schema,
-    views: definition.views || {},
-    actions: definition.actions || {},
+    views,
+    actions,
     apis: definition.apis || {},
     hooks: definition.hooks || {},
     methods: definition.methods || {},
-    options: definition.options || {}
+    options: definition.options || {},
+    context
   }
 }
+
+/**
+ * 函数式定义的优势：
+ *
+ * 1. APIs 是可执行函数：
+ *    - 直接调用 `UserModel.apis.getList(params)`
+ *    - 可以自定义实现逻辑
+ *    - 支持复杂的数据转换
+ *
+ * 2. Actions 是可执行函数：
+ *    - 直接调用 `UserModel.actions.activate({ id: '123' })`
+ *    - 可以访问 context（repository、eventBus 等）
+ *    - 支持复杂的业务逻辑
+ *
+ * 3. Views 是函数返回配置：
+ *    - 可以根据 context 动态生成配置
+ *    - 支持根据权限、状态等条件调整视图
+ *    - 配置仍然是声明式的
+ *
+ * 4. 完全的灵活性：
+ *    - 函数内可以访问外部依赖
+ *    - 可以组合调用其他 APIs 或 Methods
+ *    - 支持复杂的业务流程编排
+ */
 
 // 使用示例 - 在 defineModel 中统一定义所有配置
 const UserModel = defineModel({
@@ -190,8 +356,8 @@ const UserModel = defineModel({
     }
   }),
 
-  // 2. Views 定义
-  views: {
+  // 2. Views 定义（函数形式，可访问 context）
+  views: (context) => ({
     list: {
       type: 'list',
       title: 'Users',
@@ -228,86 +394,119 @@ const UserModel = defineModel({
       groupBy: 'role',
       cardFields: ['name', 'email']
     }
-  },
+  }),
 
-  // 3. Actions 定义
-  actions: {
-    activate: {
-      type: 'server',
-      label: 'Activate User',
-      method: 'activate',
-      confirm: 'Are you sure to activate this user?'
+  // 3. Actions 定义（函数形式，可执行）
+  actions: (context) => ({
+    // 激活用户
+    activate: async (params: { id: string | number }) => {
+      const { id } = params
+
+      // 可以访问 context 中的 repository
+      const result = await context.repository.updateOne(id, { isActive: true })
+
+      // 触发事件
+      context.eventBus.emit('user:activated', { id, result })
+
+      return result
     },
 
-    deactivate: {
-      type: 'server',
-      label: 'Deactivate User',
-      method: 'deactivate',
-      confirm: 'Are you sure to deactivate this user?'
+    // 停用用户
+    deactivate: async (params: { id: string | number }) => {
+      const { id } = params
+      const result = await context.repository.updateOne(id, { isActive: false })
+      context.eventBus.emit('user:deactivated', { id, result })
+      return result
     },
 
-    sendEmail: {
-      type: 'client',
-      label: 'Send Email',
-      handler: 'openEmailDialog'
+    // 发送邮件
+    sendEmail: async (params: { id: string | number; subject: string; body: string }) => {
+      const { id, subject, body } = params
+      const user = await context.repository.getOne(id)
+
+      // 调用邮件服务
+      await emailService.send({
+        to: user.email,
+        subject,
+        body
+      })
+
+      return { success: true }
     },
 
-    exportUsers: {
-      type: 'server',
-      label: 'Export Users',
-      method: 'export',
-      params: { format: 'xlsx' }
+    // 导出用户
+    export: async (params: { format: 'xlsx' | 'csv' }) => {
+      const { format } = params
+      const users = await context.repository.getList({})
+
+      // 调用导出服务
+      const file = await exportService.export(users.data, format)
+
+      return { file, filename: `users.${format}` }
     }
-  },
+  }),
 
-  // 4. APIs 配置
+  // 4. APIs 定义（可执行函数）
   apis: {
-    getList: {
-      url: '/api/users',
-      method: 'GET',
-      transform: (response) => ({
-        data: response.users,
-        total: response.total
+    // 标准 CRUD API - 可以使用默认实现或自定义
+    getList: async (params: GetListParams) => {
+      // 方式 1: 使用默认的 HTTP 请求
+      const response = await httpClient.get('/api/users', { params })
+
+      // 自定义数据转换
+      return {
+        data: response.data.users,
+        total: response.data.total,
+        page: params.pagination?.page,
+        pageSize: params.pagination?.pageSize
+      }
+    },
+
+    getOne: async (id: string | number) => {
+      const response = await httpClient.get(`/api/users/${id}`)
+      return response.data
+    },
+
+    createOne: async (data: any) => {
+      // 可以在这里添加自定义逻辑
+      const response = await httpClient.post('/api/users', {
+        user: data // 自定义请求格式
       })
+      return response.data
     },
 
-    getOne: {
-      url: '/api/users/:id',
-      method: 'GET'
+    updateOne: async (id: string | number, data: any) => {
+      const response = await httpClient.put(`/api/users/${id}`, data)
+      return response.data
     },
 
-    createOne: {
-      url: '/api/users',
-      method: 'POST',
-      transform: (data) => ({
-        user: data
-      })
+    deleteOne: async (id: string | number) => {
+      const response = await httpClient.delete(`/api/users/${id}`)
+      return response.status === 204
     },
 
-    updateOne: {
-      url: '/api/users/:id',
-      method: 'PUT'
+    // 自定义 API 方法
+    activate: async (id: string | number) => {
+      const response = await httpClient.post(`/api/users/${id}/activate`)
+      return response.data
     },
 
-    deleteOne: {
-      url: '/api/users/:id',
-      method: 'DELETE'
+    deactivate: async (id: string | number) => {
+      const response = await httpClient.post(`/api/users/${id}/deactivate`)
+      return response.data
     },
 
-    // 自定义 API
-    activate: {
-      url: '/api/users/:id/activate',
-      method: 'POST'
+    batchActivate: async (ids: Array<string | number>) => {
+      const response = await httpClient.post('/api/users/batch-activate', { ids })
+      return response.data
     },
 
-    deactivate: {
-      url: '/api/users/:id/deactivate',
-      method: 'POST'
-    },
-
-    export: {
-      url: '/api/users/export',
-      method: 'POST'
+    exportToExcel: async () => {
+      const response = await httpClient.post('/api/users/export',
+        { format: 'xlsx' },
+        { responseType: 'blob' }
+      )
+      return response.data
     }
   },
 
@@ -1544,21 +1743,77 @@ const userRepository = container.get<IRepository>(TYPES.Repository)
 const users = await userRepository.getList({ /* ... */ })
 ```
 
-### 3. 使用 Model - 访问 Views 和 Actions
+### 3. 使用 Model - 调用 APIs、Actions 和 Methods
 
 ```typescript
-// 获取 Model 定义的 Views
-const userListView = UserModel.views.list
-const userFormView = UserModel.views.form
+// ===== 1. 调用 APIs（可执行函数）=====
 
-console.log('List view columns:', userListView.columns)
-console.log('Form view sections:', userFormView.sections)
+// 获取用户列表
+const users = await UserModel.apis.getList({
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', order: 'DESC' }],
+  filter: { role: 'admin' }
+})
+console.log('Users:', users.data)
 
-// 执行 Model 定义的 Actions
-await UserModel.executeAction('activate', { id: 'user-123' })
-await UserModel.executeAction('sendEmail', { id: 'user-123' })
+// 获取单个用户
+const user = await UserModel.apis.getOne('user-123')
+console.log('User:', user)
 
-// 调用自定义方法
+// 创建用户
+const newUser = await UserModel.apis.createOne({
+  email: 'test@example.com',
+  name: 'Test User',
+  role: 'user'
+})
+
+// 更新用户
+const updatedUser = await UserModel.apis.updateOne('user-123', {
+  name: 'Updated Name'
+})
+
+// 删除用户
+await UserModel.apis.deleteOne('user-123')
+
+// 调用自定义 API
+await UserModel.apis.activate('user-123')
+await UserModel.apis.batchActivate(['user-1', 'user-2', 'user-3'])
+const excelFile = await UserModel.apis.exportToExcel()
+
+
+// ===== 2. 执行 Actions（可执行函数）=====
+
+// 激活用户
+await UserModel.actions.activate({ id: 'user-123' })
+
+// 停用用户
+await UserModel.actions.deactivate({ id: 'user-123' })
+
+// 发送邮件
+await UserModel.actions.sendEmail({
+  id: 'user-123',
+  subject: 'Welcome!',
+  body: 'Welcome to our platform!'
+})
+
+// 导出用户
+const result = await UserModel.actions.export({ format: 'xlsx' })
+console.log('Export file:', result.filename)
+
+
+// ===== 3. 访问 Views（函数返回的配置）=====
+
+// 获取视图配置（通过调用 views 函数）
+const viewConfigs = UserModel.views(context)
+const listView = viewConfigs.list
+const formView = viewConfigs.form
+
+console.log('List view columns:', listView.columns)
+console.log('Form view sections:', formView.sections)
+
+
+// ===== 4. 调用自定义 Methods =====
+
 await UserModel.methods.activate('user-123')
 await UserModel.methods.changeRole('user-123', 'admin')
 await UserModel.methods.resetPassword('user-123')
@@ -2297,35 +2552,79 @@ describe('Engine Integration', () => {
 
 ### 核心特性
 
-1. **统一的 Model 定义**：类似 Odoo 的设计理念，在 `defineModel` 中统一定义 Schema、Views、Actions、APIs、Hooks、Methods，一站式配置，清晰直观
+1. **函数式优先设计** ⭐ 重点创新
+   - **APIs 是可执行函数**：直接调用 `UserModel.apis.getList(params)`，无需额外执行器
+   - **Actions 是可执行函数**：直接调用 `UserModel.actions.activate({ id })`，可访问 context
+   - **Views 是函数返回配置**：支持动态生成，可根据权限、状态调整
+   - **完全的灵活性**：支持自定义逻辑、数据转换、业务编排
 
-2. **符合 DDD 原则**：清晰的分层架构
+2. **统一的 Model 定义**：类似 Odoo 的设计理念
+   - 在 `defineModel` 中统一定义 Schema、Views、Actions、APIs、Hooks、Methods
+   - 一站式配置，清晰直观
+   - 相关配置集中管理，易于维护
+
+3. **符合 DDD 原则**：清晰的 5 层架构
    - **Model 层**：统一定义层，包含所有业务配置
-   - **Repository 层**：数据访问协调
+   - **Repository 层**：数据访问协调，集成缓存
    - **State 层**：响应式状态管理（MobX）
-   - **Render 层**：渲染注册表
-   - **Context & DI 层**：依赖注入
+   - **Render 层**：渲染注册表，支持 context 注入
+   - **Context & DI 层**：依赖注入容器
 
-3. **独立的 Data Access Layer**：
+4. **独立的 Data Access Layer**：
    - 作为独立的 IoC 层设计
    - 第一版支持 HTTP，架构支持未来扩展 GraphQL、WebSocket、gRPC 等
    - 插拔式设计，可在运行时切换不同实现
 
-4. **框架无关**：可在任何前端框架或 Node.js 环境中使用
+5. **框架无关**：可在任何前端框架或 Node.js 环境中使用
 
-5. **响应式设计**：基于 MobX 的观察者模式，数据变化自动更新
+6. **响应式设计**：基于 MobX 的观察者模式，数据变化自动更新
 
-6. **灵活扩展**：插件系统、中间件、上下文注入等多种扩展方式
+7. **类型安全**：完整的 TypeScript 支持，函数签名提供更好的类型推导
 
-7. **类型安全**：完整的 TypeScript 支持，开发体验好
-
-8. **易于测试**：依赖注入、分层架构使得单元测试和集成测试都很容易
+8. **易于测试**：函数可直接测试，依赖注入使得单元测试和集成测试都很容易
 
 ### 架构优势
 
-- **一处定义，多处使用**：在 Model 中定义的 Views、Actions、APIs 可以在整个应用中复用
-- **职责清晰**：Model 负责业务定义，Repository 负责数据访问，State 负责状态管理，各司其职
-- **易于维护**：相关配置集中管理，修改方便，不易遗漏
-- **可扩展性强**：通过 Data Access Layer 的 IoC 设计，轻松支持多种数据源和协议
+- **函数式优先** ⭐
+  - 直接可调用，符合直觉
+  - 支持复杂逻辑和自定义
+  - 更好的类型推导和 IDE 支持
+  - 更容易测试和调试
 
-通过合理使用本引擎，可以快速构建复杂的数据驱动应用，同时保持代码的可维护性和可扩展性。
+- **一处定义，多处使用**
+  - 在 Model 中定义的 Views、Actions、APIs 可在整个应用中复用
+  - 配置集中管理，修改方便，不易遗漏
+
+- **职责清晰**
+  - Model 负责业务定义（函数式）
+  - Repository 负责数据访问
+  - State 负责状态管理
+  - 各司其职，易于维护
+
+- **可扩展性强**
+  - Data Access Layer 的 IoC 设计，轻松支持多种数据源和协议
+  - 插件系统、中间件、上下文注入等多种扩展方式
+
+### 使用示例对比
+
+```typescript
+// ❌ 传统配置方式
+const config = {
+  apis: {
+    getList: { url: '/api/users', method: 'GET' }
+  }
+}
+// 需要额外的执行器
+const users = await executor.execute(config.apis.getList, params)
+
+// ✅ 函数式方式
+const UserModel = defineModel({
+  apis: {
+    getList: async (params) => { /* 自定义实现 */ }
+  }
+})
+// 直接调用函数
+const users = await UserModel.apis.getList(params)
+```
+
+通过**函数式优先**的设计理念和**统一的 Model 定义**，可以快速构建复杂的数据驱动应用，同时保持代码的可维护性、可扩展性和可测试性。
