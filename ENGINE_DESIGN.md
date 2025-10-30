@@ -42,43 +42,50 @@
 │  │  • DataRender 注册/反注册                             │   │
 │  │  • ViewRender 注册/反注册                             │   │
 │  │  • Context 注入扩展                                   │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                             ▲                                 │
-│  ┌──────────────┬───────────┼────────────┬─────────────┐    │
-│  │              │            │            │             │    │
-│  │   Model      │   View     │   Action   │   State     │    │
-│  │   (模型层)   │  (视图层)  │  (动作层)  │  (状态层)   │    │
-│  │              │            │            │             │    │
-│  └──────┬───────┴────────────┴────────────┴──────┬──────┘    │
-│         │                                         │           │
-│  ┌──────▼────────┐                     ┌──────────▼──────┐   │
-│  │  Repository   │                     │   Event Bus     │   │
-│  │  (数据访问层) │                     │   (事件总线)    │   │
-│  └──────┬────────┘                     └─────────────────┘   │
-│         │                                                     │
-│  ┌──────▼────────────────────────────────────────────────┐   │
-│  │            Context & DI Container (依赖注入)          │   │
-│  └──────┬────────────────────────────────────────────────┘   │
-│         │                                                     │
-└─────────┼─────────────────────────────────────────────────────┘
-          │
-          │ (通过 DI 注入)
-          │
-┌─────────▼─────────────────────────────────────────────────────┐
-│              Data Access Layer (数据访问层 IoC)               │
-│                                                                │
-│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐   │
-│  │  HTTP Client   │  │  GraphQL (待)  │  │ WebSocket(待)│   │
-│  │   (第一版)     │  │   (未来支持)   │  │  (未来支持)  │   │
-│  └────────────────┘  └────────────────┘  └──────────────┘   │
-│                                                                │
-│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐   │
-│  │    gRPC (待)   │  │   MQTT (待)    │  │  其他协议... │   │
-│  │   (未来支持)   │  │   (未来支持)   │  │  (可扩展)    │   │
-│  └────────────────┘  └────────────────┘  └──────────────┘   │
-│                                                                │
-│           ▲ 统一接口：IDataAccessClient                       │
-└───────────┼────────────────────────────────────────────────────┘
+│  └─────────────────────┬────────────────────────────────┘   │
+│                        │                                     │
+│  ┌─────────────────────▼──────────────────────────┐         │
+│  │         Model 层（统一定义层）                 │         │
+│  │  ┌───────────────────────────────────────┐    │         │
+│  │  │ defineModel({                         │    │         │
+│  │  │   schema: {...},    // Schema 定义    │    │         │
+│  │  │   views: {...},     // View 定义      │    │         │
+│  │  │   actions: {...},   // Action 定义    │    │         │
+│  │  │   apis: {...},      // API 配置       │    │         │
+│  │  │   hooks: {...},     // 生命周期钩子   │    │         │
+│  │  │   methods: {...}    // 自定义方法     │    │         │
+│  │  │ })                                     │    │         │
+│  │  └───────────────────────────────────────┘    │         │
+│  └──────────────┬──────────────────────┬──────────┘         │
+│                 │                      │                     │
+│  ┌──────────────▼───────┐   ┌─────────▼─────────┐          │
+│  │  Repository          │   │   State (MobX)    │          │
+│  │  (数据访问协调)      │   │   (状态管理)      │          │
+│  └──────────────┬───────┘   └───────────────────┘          │
+│                 │                                            │
+│  ┌──────────────▼────────┐  ┌────────────────────┐         │
+│  │  Event Bus            │  │  DI Container      │         │
+│  │  (事件总线)           │  │  (依赖注入)        │         │
+│  └───────────────────────┘  └─────────┬──────────┘         │
+│                                        │                     │
+└────────────────────────────────────────┼─────────────────────┘
+                                         │ (通过 DI 注入)
+                                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Data Access Layer (数据访问层 IoC)              │
+│                                                               │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  │
+│  │  HTTP Client   │  │  GraphQL (待)  │  │ WebSocket(待)│  │
+│  │   (第一版)     │  │   (未来支持)   │  │  (未来支持)  │  │
+│  └────────────────┘  └────────────────┘  └──────────────┘  │
+│                                                               │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  │
+│  │    gRPC (待)   │  │   MQTT (待)    │  │  其他协议... │  │
+│  │   (未来支持)   │  │   (未来支持)   │  │  (可扩展)    │  │
+│  └────────────────┘  └────────────────┘  └──────────────┘  │
+│                                                               │
+│           ▲ 统一接口：IDataAccessClient                      │
+└───────────┼───────────────────────────────────────────────────┘
             ▼
   ┌─────────────────────┐
   │   External Data     │
@@ -88,71 +95,317 @@
 
 ### 核心分层
 
-#### 1. Model 层（领域模型）
+#### 1. Model 层（领域模型 - 统一定义层）
 
-基于 DDD 的领域模型设计，类似 Odoo 的模型定义方式。
+基于 DDD 的领域模型设计，类似 Odoo 的模型定义方式。**View、Action、APIs、Hooks 都在这一层统一定义**。
 
 ```typescript
-// 核心接口
-interface IModel {
-  // 模型元数据
-  readonly modelName: string
-  readonly schema: SchemaDefinition
+// Model 定义接口
+interface ModelDefinition {
+  // 基础元数据
+  name: string
 
-  // 数据访问
-  create(data: any): Promise<any>
-  read(id: string | number): Promise<any>
-  update(id: string | number, data: any): Promise<any>
-  delete(id: string | number): Promise<boolean>
-  search(criteria: any): Promise<any[]>
+  // Schema 定义（字段）
+  schema: SchemaDefinition
+
+  // 视图定义
+  views?: {
+    list?: ViewConfig
+    form?: ViewConfig
+    kanban?: ViewConfig
+    calendar?: ViewConfig
+    [key: string]: ViewConfig | undefined
+  }
+
+  // 动作定义
+  actions?: {
+    [actionName: string]: ActionConfig
+  }
+
+  // API 配置（数据访问配置）
+  apis?: {
+    getList?: ApiConfig
+    getOne?: ApiConfig
+    createOne?: ApiConfig
+    updateOne?: ApiConfig
+    deleteOne?: ApiConfig
+    [customApi: string]: ApiConfig | undefined
+  }
 
   // 生命周期钩子
-  beforeCreate?(data: any): Promise<any>
-  afterCreate?(record: any): Promise<void>
-  beforeUpdate?(id: string | number, data: any): Promise<any>
-  afterUpdate?(record: any): Promise<void>
-  beforeDelete?(id: string | number): Promise<boolean>
-  afterDelete?(id: string | number): Promise<void>
-}
+  hooks?: {
+    beforeCreate?: (data: any) => Promise<any>
+    afterCreate?: (record: any) => Promise<void>
+    beforeUpdate?: (id: string | number, data: any) => Promise<any>
+    afterUpdate?: (record: any) => Promise<void>
+    beforeDelete?: (id: string | number) => Promise<boolean>
+    afterDelete?: (id: string | number) => Promise<void>
+    beforeRead?: (id: string | number) => Promise<void>
+    afterRead?: (record: any) => Promise<any>
+    beforeSearch?: (criteria: any) => Promise<any>
+    afterSearch?: (results: any[]) => Promise<any[]>
+  }
 
-// BaseModel 实现
-class BaseModel implements IModel {
-  // 由 Repository 注入
-  protected repository: IRepository
+  // 自定义方法
+  methods?: {
+    [methodName: string]: (...args: any[]) => Promise<any>
+  }
 
-  // 模型注册表
-  private static registry: Map<string, typeof BaseModel> = new Map()
-
-  // 装饰器：定义模型
-  static defineModel(name: string, schema: SchemaDefinition) {
-    // 注册模型到全局注册表
+  // 选项配置
+  options?: {
+    tableName?: string
+    description?: string
+    timestamps?: boolean
+    softDelete?: boolean
   }
 }
 
-// 使用示例
-@Model('User')
-class UserModel extends BaseModel {
-  // 定义 Schema
-  static schema = defineSchema({
+// defineModel 函数 - 统一定义入口
+function defineModel(definition: ModelDefinition): IModel {
+  return {
+    name: definition.name,
+    schema: definition.schema,
+    views: definition.views || {},
+    actions: definition.actions || {},
+    apis: definition.apis || {},
+    hooks: definition.hooks || {},
+    methods: definition.methods || {},
+    options: definition.options || {}
+  }
+}
+
+// 使用示例 - 在 defineModel 中统一定义所有配置
+const UserModel = defineModel({
+  name: 'User',
+
+  // 1. Schema 定义
+  schema: defineSchema({
     name: 'User',
     fields: {
       id: field.uuid({ required: true }),
-      email: field.email({ required: true }),
-      name: field.string({ required: true })
+      email: field.email({ required: true, unique: true }),
+      name: field.string({ required: true }),
+      role: field.enum({ values: ['admin', 'user'] as const }),
+      isActive: field.boolean({ default: true })
     }
-  })
+  }),
 
-  // 自定义业务方法
-  async activate() {
-    return this.update(this.id, { isActive: true })
-  }
+  // 2. Views 定义
+  views: {
+    list: {
+      type: 'list',
+      title: 'Users',
+      columns: [
+        { field: 'email', label: 'Email', sortable: true },
+        { field: 'name', label: 'Name', sortable: true },
+        { field: 'role', label: 'Role', filterable: true },
+        { field: 'isActive', label: 'Status', render: 'badge' }
+      ],
+      actions: ['create', 'edit', 'delete'],
+      bulkActions: ['delete', 'export'],
+      defaultSort: { field: 'createdAt', order: 'DESC' }
+    },
 
-  // 生命周期钩子
-  async beforeCreate(data: any) {
-    // 数据验证、转换等
-    return data
+    form: {
+      type: 'form',
+      title: 'User Form',
+      layout: 'vertical',
+      sections: [
+        {
+          title: 'Basic Info',
+          fields: ['email', 'name']
+        },
+        {
+          title: 'Permissions',
+          fields: ['role', 'isActive']
+        }
+      ]
+    },
+
+    kanban: {
+      type: 'kanban',
+      title: 'User Kanban',
+      groupBy: 'role',
+      cardFields: ['name', 'email']
+    }
+  },
+
+  // 3. Actions 定义
+  actions: {
+    activate: {
+      type: 'server',
+      label: 'Activate User',
+      method: 'activate',
+      confirm: 'Are you sure to activate this user?'
+    },
+
+    deactivate: {
+      type: 'server',
+      label: 'Deactivate User',
+      method: 'deactivate',
+      confirm: 'Are you sure to deactivate this user?'
+    },
+
+    sendEmail: {
+      type: 'client',
+      label: 'Send Email',
+      handler: 'openEmailDialog'
+    },
+
+    exportUsers: {
+      type: 'server',
+      label: 'Export Users',
+      method: 'export',
+      params: { format: 'xlsx' }
+    }
+  },
+
+  // 4. APIs 配置
+  apis: {
+    getList: {
+      url: '/api/users',
+      method: 'GET',
+      transform: (response) => ({
+        data: response.users,
+        total: response.total
+      })
+    },
+
+    getOne: {
+      url: '/api/users/:id',
+      method: 'GET'
+    },
+
+    createOne: {
+      url: '/api/users',
+      method: 'POST',
+      transform: (data) => ({
+        user: data
+      })
+    },
+
+    updateOne: {
+      url: '/api/users/:id',
+      method: 'PUT'
+    },
+
+    deleteOne: {
+      url: '/api/users/:id',
+      method: 'DELETE'
+    },
+
+    // 自定义 API
+    activate: {
+      url: '/api/users/:id/activate',
+      method: 'POST'
+    },
+
+    deactivate: {
+      url: '/api/users/:id/deactivate',
+      method: 'POST'
+    },
+
+    export: {
+      url: '/api/users/export',
+      method: 'POST'
+    }
+  },
+
+  // 5. Hooks 定义
+  hooks: {
+    async beforeCreate(data) {
+      // 密码加密
+      if (data.password) {
+        data.password = await hashPassword(data.password)
+      }
+
+      // 设置默认值
+      data.isActive = data.isActive ?? true
+
+      return data
+    },
+
+    async afterCreate(record) {
+      // 发送欢迎邮件
+      await sendWelcomeEmail(record.email)
+
+      // 记录日志
+      console.log('User created:', record.id)
+    },
+
+    async beforeUpdate(id, data) {
+      // 验证权限
+      const currentUser = await getCurrentUser()
+      if (currentUser.role !== 'admin' && data.role) {
+        throw new Error('Only admin can change user role')
+      }
+
+      return data
+    },
+
+    async afterUpdate(record) {
+      // 清除缓存
+      await clearUserCache(record.id)
+    },
+
+    async beforeDelete(id) {
+      // 检查是否可以删除
+      const user = await this.read(id)
+      if (user.role === 'admin') {
+        throw new Error('Cannot delete admin user')
+      }
+
+      return true
+    },
+
+    async afterDelete(id) {
+      // 清理关联数据
+      await cleanupUserData(id)
+    }
+  },
+
+  // 6. Methods 定义（自定义业务方法）
+  methods: {
+    async activate(id: string | number) {
+      return this.update(id, { isActive: true })
+    },
+
+    async deactivate(id: string | number) {
+      return this.update(id, { isActive: false })
+    },
+
+    async changeRole(id: string | number, newRole: string) {
+      // 验证角色
+      const validRoles = ['admin', 'user']
+      if (!validRoles.includes(newRole)) {
+        throw new Error('Invalid role')
+      }
+
+      return this.update(id, { role: newRole })
+    },
+
+    async resetPassword(id: string | number) {
+      const newPassword = generateRandomPassword()
+      const hashedPassword = await hashPassword(newPassword)
+
+      await this.update(id, { password: hashedPassword })
+
+      // 发送密码重置邮件
+      const user = await this.read(id)
+      await sendPasswordResetEmail(user.email, newPassword)
+
+      return { success: true }
+    }
+  },
+
+  // 7. Options 配置
+  options: {
+    tableName: 'users',
+    description: 'User management model',
+    timestamps: true,
+    softDelete: true
   }
-}
+})
 ```
 
 #### 2. Repository 层（数据访问）
@@ -272,168 +525,7 @@ class Repository implements IRepository {
 }
 ```
 
-#### 3. Service 层（业务服务）
-
-编排 Model 和 Repository，处理复杂业务逻辑。
-
-```typescript
-interface IService {
-  execute(action: string, params: any): Promise<any>
-}
-
-class ModelService implements IService {
-  constructor(
-    private model: IModel,
-    private eventBus: EventEmitter3
-  ) {}
-
-  async execute(action: string, params: any): Promise<any> {
-    // 1. 触发 before 事件
-    // 2. 执行动作
-    // 3. 触发 after 事件
-    // 4. 返回结果
-  }
-}
-```
-
-#### 4. View 层（视图定义）
-
-定义视图类型、配置和元数据。
-
-```typescript
-// 视图类型枚举
-enum ViewType {
-  LIST = 'list',
-  FORM = 'form',
-  KANBAN = 'kanban',
-  CALENDAR = 'calendar',
-  GANTT = 'gantt',
-  PIVOT = 'pivot',
-  GRAPH = 'graph',
-  CUSTOM = 'custom'
-}
-
-// 视图定义接口
-interface IViewDefinition {
-  id: string
-  type: ViewType
-  modelName: string
-  title?: string
-  fields?: string[] // 显示的字段
-  config?: Record<string, any> // 视图特定配置
-}
-
-// 列表视图配置
-interface ListViewConfig {
-  columns: Array<{
-    field: string
-    label: string
-    width?: number
-    sortable?: boolean
-    filterable?: boolean
-    render?: string // 自定义渲染器名称
-  }>
-  actions?: Array<{
-    name: string
-    label: string
-    type: 'button' | 'menu'
-  }>
-  bulkActions?: string[]
-  defaultSort?: { field: string; order: 'ASC' | 'DESC' }
-}
-
-// 表单视图配置
-interface FormViewConfig {
-  layout: 'vertical' | 'horizontal' | 'grid'
-  sections?: Array<{
-    title?: string
-    fields: string[]
-  }>
-  readonly?: boolean
-}
-
-// 视图注册表
-class ViewRegistry {
-  private views: Map<string, IViewDefinition> = new Map()
-
-  register(view: IViewDefinition): void {
-    this.views.set(view.id, view)
-  }
-
-  get(id: string): IViewDefinition | undefined {
-    return this.views.get(id)
-  }
-
-  getByModel(modelName: string, type?: ViewType): IViewDefinition[] {
-    return Array.from(this.views.values())
-      .filter(v => v.modelName === modelName && (!type || v.type === type))
-  }
-}
-```
-
-#### 5. Action 层（动作定义）
-
-定义用户操作和系统动作。
-
-```typescript
-// 动作类型
-enum ActionType {
-  WINDOW = 'window',      // 打开视图
-  SERVER = 'server',      // 服务端动作
-  CLIENT = 'client',      // 客户端动作
-  REPORT = 'report',      // 报表
-  URL = 'url'            // 跳转 URL
-}
-
-// 动作定义接口
-interface IActionDefinition {
-  id: string
-  name: string
-  type: ActionType
-  modelName?: string
-  config?: ActionConfig
-}
-
-// 窗口动作配置
-interface WindowActionConfig {
-  viewType: ViewType
-  viewId?: string
-  target?: 'current' | 'new' | 'modal'
-  context?: Record<string, any>
-  domain?: any[] // 过滤条件
-}
-
-// 服务端动作配置
-interface ServerActionConfig {
-  method: string
-  params?: Record<string, any>
-}
-
-// Action Executor
-class ActionExecutor {
-  constructor(
-    private viewRegistry: ViewRegistry,
-    private modelRegistry: Map<string, IModel>,
-    private eventBus: EventEmitter3
-  ) {}
-
-  async execute(action: IActionDefinition, context?: any): Promise<any> {
-    // 1. 根据 action.type 分发
-    // 2. 执行对应的动作处理器
-    // 3. 返回结果
-  }
-
-  private async executeWindowAction(action: IActionDefinition, context?: any) {
-    // 打开视图的逻辑
-  }
-
-  private async executeServerAction(action: IActionDefinition, context?: any) {
-    // 调用服务端方法
-  }
-}
-```
-
-#### 6. State 层（状态管理）
+#### 3. State 层（状态管理）
 
 基于 MobX 的响应式状态管理。
 
@@ -568,7 +660,7 @@ class RootStore {
 }
 ```
 
-#### 7. Render 层（渲染管理）
+#### 4. Render 层（渲染管理）
 
 管理渲染器的注册和调用，不实现具体渲染逻辑。
 
@@ -669,7 +761,7 @@ class RenderRegistry {
 }
 ```
 
-#### 8. Context & DI 层（依赖注入）
+#### 5. Context & DI 层（依赖注入）
 
 使用 InversifyJS 管理依赖关系。
 
@@ -1452,96 +1544,27 @@ const userRepository = container.get<IRepository>(TYPES.Repository)
 const users = await userRepository.getList({ /* ... */ })
 ```
 
-### 3. 定义视图
+### 3. 使用 Model - 访问 Views 和 Actions
 
 ```typescript
-import { ViewRegistry, ViewType } from '@schema-component/engine'
+// 获取 Model 定义的 Views
+const userListView = UserModel.views.list
+const userFormView = UserModel.views.form
 
-const viewRegistry = ViewRegistry.getInstance()
+console.log('List view columns:', userListView.columns)
+console.log('Form view sections:', userFormView.sections)
 
-// 注册列表视图
-viewRegistry.register({
-  id: 'user_list',
-  type: ViewType.LIST,
-  modelName: 'User',
-  title: 'Users',
-  fields: ['id', 'email', 'name', 'role', 'createdAt'],
-  config: {
-    columns: [
-      { field: 'email', label: 'Email', sortable: true },
-      { field: 'name', label: 'Name', sortable: true },
-      { field: 'role', label: 'Role', filterable: true }
-    ],
-    actions: [
-      { name: 'edit', label: 'Edit', type: 'button' },
-      { name: 'delete', label: 'Delete', type: 'button' }
-    ],
-    bulkActions: ['delete', 'export']
-  }
-})
+// 执行 Model 定义的 Actions
+await UserModel.executeAction('activate', { id: 'user-123' })
+await UserModel.executeAction('sendEmail', { id: 'user-123' })
 
-// 注册表单视图
-viewRegistry.register({
-  id: 'user_form',
-  type: ViewType.FORM,
-  modelName: 'User',
-  title: 'User Form',
-  fields: ['email', 'name', 'role'],
-  config: {
-    layout: 'vertical',
-    sections: [
-      {
-        title: 'Basic Info',
-        fields: ['email', 'name']
-      },
-      {
-        title: 'Permissions',
-        fields: ['role']
-      }
-    ]
-  }
-})
+// 调用自定义方法
+await UserModel.methods.activate('user-123')
+await UserModel.methods.changeRole('user-123', 'admin')
+await UserModel.methods.resetPassword('user-123')
 ```
 
-### 4. 定义 Action
-
-```typescript
-import { ActionType } from '@schema-component/engine'
-
-const actionExecutor = new ActionExecutor(viewRegistry, modelRegistry, eventBus)
-
-// 定义打开用户列表的动作
-const openUserListAction = {
-  id: 'open_user_list',
-  name: 'Open User List',
-  type: ActionType.WINDOW,
-  modelName: 'User',
-  config: {
-    viewType: ViewType.LIST,
-    viewId: 'user_list',
-    target: 'current'
-  }
-}
-
-// 执行动作
-await actionExecutor.execute(openUserListAction)
-
-// 定义服务端动作
-const exportUsersAction = {
-  id: 'export_users',
-  name: 'Export Users',
-  type: ActionType.SERVER,
-  modelName: 'User',
-  config: {
-    method: 'exportToExcel',
-    params: { format: 'xlsx' }
-  }
-}
-
-await actionExecutor.execute(exportUsersAction)
-```
-
-### 5. 状态管理
+### 4. 状态管理
 
 ```typescript
 import { RootStore } from '@schema-component/engine'
@@ -1577,7 +1600,7 @@ await userStore.update('user-id-123', {
 await userStore.delete('user-id-123')
 ```
 
-### 6. 注册渲染器
+### 5. 注册渲染器
 
 ```typescript
 import { RenderRegistry } from '@schema-component/engine'
@@ -1633,7 +1656,7 @@ const listRenderData = renderRegistry.renderView(listView, users, {
 })
 ```
 
-### 7. 完整示例：初始化 Engine
+### 6. 完整示例：初始化 Engine
 
 ```typescript
 import { EngineContext, Container } from '@schema-component/engine'
@@ -1642,7 +1665,7 @@ import { EngineContext, Container } from '@schema-component/engine'
 const container = new Container()
 
 // 2. 注册依赖
-container.bind(TYPES.ApiAdapter).to(RestApiAdapter)
+container.bind(TYPES.DataAccessClient).to(HttpDataAccessClient)
 container.bind(TYPES.EventBus).toConstantValue(new EventBus())
 container.bind(TYPES.RenderRegistry).toConstantValue(RenderRegistry.getInstance())
 
@@ -1652,25 +1675,37 @@ const engineContext = new EngineContext(container, {
   debug: true
 })
 
-// 4. 注册 Models
-const userModel = new UserModel()
-engineContext.registerModel(userModel)
+// 4. 注册 Models（Model 中已包含 views, actions, apis, hooks）
+engineContext.registerModel(UserModel)
+engineContext.registerModel(PostModel)
+engineContext.registerModel(CommentModel)
 
-// 5. 注册 Views
-const viewRegistry = engineContext.get(TYPES.ViewRegistry)
-viewRegistry.register(userListView)
-viewRegistry.register(userFormView)
-
-// 6. 注册 Renderers
+// 5. 注册 Renderers
 const renderRegistry = engineContext.get(TYPES.RenderRegistry)
 renderRegistry.registerDataRenderer(emailRenderer)
+renderRegistry.registerDataRenderer(badgeRenderer)
 renderRegistry.registerViewRenderer(listViewRenderer)
+renderRegistry.registerViewRenderer(formViewRenderer)
 
-// 7. 初始化 Store
+// 6. 初始化 Store
 const rootStore = engineContext.get(TYPES.Store)
 
-// 8. 使用 Engine
+// 7. 使用 Engine
 export { engineContext, rootStore }
+
+// 8. 使用示例
+const userStore = rootStore.getModelStore('User')
+await userStore.load({ pagination: { page: 1, pageSize: 10 } })
+
+// 访问 Model 的 views
+const userListView = UserModel.views.list
+const userFormView = UserModel.views.form
+
+// 执行 Model 的 actions
+await UserModel.executeAction('activate', { id: 'user-123' })
+
+// 调用 Model 的 methods
+await UserModel.methods.resetPassword('user-123')
 ```
 
 ## 目录结构
@@ -1678,55 +1713,46 @@ export { engineContext, rootStore }
 ```
 packages/engine/
 ├── src/
-│   ├── core/
-│   │   ├── BaseModel.ts           # 基础模型类
-│   │   ├── ModelRegistry.ts       # 模型注册表
-│   │   ├── EngineContext.ts       # Engine 上下文
-│   │   └── types.ts               # 核心类型定义
+│   ├── core/                          # Model 层（统一定义层）
+│   │   ├── defineModel.ts             # defineModel 函数
+│   │   ├── BaseModel.ts               # 基础模型类
+│   │   ├── ModelRegistry.ts           # 模型注册表
+│   │   ├── ModelExecutor.ts           # Model 执行器（处理 actions/methods）
+│   │   ├── EngineContext.ts           # Engine 上下文
+│   │   ├── types.ts                   # 核心类型定义
+│   │   ├── viewTypes.ts               # View 配置类型
+│   │   ├── actionTypes.ts             # Action 配置类型
+│   │   └── apiTypes.ts                # API 配置类型
 │   │
-│   ├── data-access/               # 数据访问层 IoC（独立层）
+│   ├── data-access/                   # 数据访问层 IoC（独立层）
 │   │   ├── interfaces/
-│   │   │   ├── IDataAccessClient.ts    # 数据访问客户端接口
-│   │   │   ├── IUrlMapper.ts           # URL 映射器接口
-│   │   │   └── types.ts                # 共享类型定义
+│   │   │   ├── IDataAccessClient.ts   # 数据访问客户端接口
+│   │   │   ├── IUrlMapper.ts          # URL 映射器接口
+│   │   │   └── types.ts               # 共享类型定义
 │   │   │
-│   │   ├── http/                       # HTTP 实现（第一版）
+│   │   ├── http/                      # HTTP 实现（第一版）
 │   │   │   ├── HttpDataAccessClient.ts # HTTP 客户端实现
-│   │   │   ├── RestUrlMapper.ts        # REST URL 映射器
-│   │   │   ├── HttpInterceptor.ts      # HTTP 拦截器
-│   │   │   └── types.ts                # HTTP 类型定义
+│   │   │   ├── RestUrlMapper.ts       # REST URL 映射器
+│   │   │   ├── HttpInterceptor.ts     # HTTP 拦截器
+│   │   │   └── types.ts               # HTTP 类型定义
 │   │   │
-│   │   ├── graphql/                    # GraphQL 实现（待支持）
+│   │   ├── graphql/                   # GraphQL 实现（待支持）
 │   │   │   ├── GraphQLDataAccessClient.ts
 │   │   │   └── types.ts
 │   │   │
-│   │   ├── websocket/                  # WebSocket 实现（待支持）
+│   │   ├── websocket/                 # WebSocket 实现（待支持）
 │   │   │   ├── WebSocketDataAccessClient.ts
 │   │   │   └── types.ts
 │   │   │
-│   │   ├── grpc/                       # gRPC 实现（待支持）
+│   │   ├── grpc/                      # gRPC 实现（待支持）
 │   │   │   └── ...
 │   │   │
-│   │   └── index.ts                    # 数据访问层导出
+│   │   └── index.ts                   # 数据访问层导出
 │   │
 │   ├── repository/
-│   │   ├── Repository.ts               # Repository 实现
-│   │   ├── CacheStrategy.ts            # 缓存策略
-│   │   └── types.ts                    # Repository 类型
-│   │
-│   ├── service/
-│   │   ├── ModelService.ts             # Model Service
-│   │   └── types.ts                    # Service 类型
-│   │
-│   ├── view/
-│   │   ├── ViewRegistry.ts             # 视图注册表
-│   │   ├── ViewDefinition.ts           # 视图定义
-│   │   └── types.ts                    # 视图类型
-│   │
-│   ├── action/
-│   │   ├── ActionExecutor.ts           # 动作执行器
-│   │   ├── ActionDefinition.ts         # 动作定义
-│   │   └── types.ts                    # 动作类型
+│   │   ├── Repository.ts              # Repository 实现
+│   │   ├── CacheStrategy.ts           # 缓存策略
+│   │   └── types.ts                   # Repository 类型
 │   │
 │   ├── state/
 │   │   ├── RootStore.ts                # 根 Store
@@ -2269,11 +2295,37 @@ describe('Engine Integration', () => {
 
 `@schema-component/engine` 提供了一个完整的、框架无关的数据引擎解决方案，具有以下特点：
 
-1. **符合 DDD 原则**：清晰的分层架构，职责明确
-2. **框架无关**：可在任何前端框架或 Node.js 环境中使用
-3. **响应式设计**：基于 MobX 的观察者模式，数据变化自动更新
-4. **灵活扩展**：插件系统、中间件、上下文注入等多种扩展方式
-5. **类型安全**：完整的 TypeScript 支持，开发体验好
-6. **易于测试**：依赖注入、分层架构使得单元测试和集成测试都很容易
+### 核心特性
+
+1. **统一的 Model 定义**：类似 Odoo 的设计理念，在 `defineModel` 中统一定义 Schema、Views、Actions、APIs、Hooks、Methods，一站式配置，清晰直观
+
+2. **符合 DDD 原则**：清晰的分层架构
+   - **Model 层**：统一定义层，包含所有业务配置
+   - **Repository 层**：数据访问协调
+   - **State 层**：响应式状态管理（MobX）
+   - **Render 层**：渲染注册表
+   - **Context & DI 层**：依赖注入
+
+3. **独立的 Data Access Layer**：
+   - 作为独立的 IoC 层设计
+   - 第一版支持 HTTP，架构支持未来扩展 GraphQL、WebSocket、gRPC 等
+   - 插拔式设计，可在运行时切换不同实现
+
+4. **框架无关**：可在任何前端框架或 Node.js 环境中使用
+
+5. **响应式设计**：基于 MobX 的观察者模式，数据变化自动更新
+
+6. **灵活扩展**：插件系统、中间件、上下文注入等多种扩展方式
+
+7. **类型安全**：完整的 TypeScript 支持，开发体验好
+
+8. **易于测试**：依赖注入、分层架构使得单元测试和集成测试都很容易
+
+### 架构优势
+
+- **一处定义，多处使用**：在 Model 中定义的 Views、Actions、APIs 可以在整个应用中复用
+- **职责清晰**：Model 负责业务定义，Repository 负责数据访问，State 负责状态管理，各司其职
+- **易于维护**：相关配置集中管理，修改方便，不易遗漏
+- **可扩展性强**：通过 Data Access Layer 的 IoC 设计，轻松支持多种数据源和协议
 
 通过合理使用本引擎，可以快速构建复杂的数据驱动应用，同时保持代码的可维护性和可扩展性。
