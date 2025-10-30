@@ -1,0 +1,53 @@
+{
+  "name": "@schema-component/storybook",
+  "version": "0.0.0",
+  "description": "Storybook documentation and component showcase for schema-component",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "storybook": "storybook dev -p 6006",
+    "build": "storybook build -o dist",
+    "serve": "npx serve dist",
+    "test": "test-storybook",
+    "clean": "rm -rf dist node_modules"
+  },
+  "keywords": [
+    "storybook",
+    "documentation",
+    "component-library",
+    "design-system"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@schema-component/schema": "workspace:*",
+    "@schema-component/engine": "workspace:*",
+    "@schema-component/theme": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^7.6.0",
+    "@storybook/addon-essentials": "^7.6.0",
+    "@storybook/addon-interactions": "^7.6.0",
+    "@storybook/addon-links": "^7.6.0",
+    "@storybook/addon-storysource": "^7.6.0",
+    "@storybook/addon-themes": "^7.6.0",
+    "@storybook/blocks": "^7.6.0",
+    "@storybook/react": "^7.6.0",
+    "@storybook/react-vite": "^7.6.0",
+    "@storybook/testing-library": "^0.2.2",
+    "@storybook/test": "^7.6.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react-syntax-highlighter": "^15.5.0",
+    "storybook": "^7.6.0",
+    "storybook-dark-mode": "^3.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

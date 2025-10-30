@@ -8,7 +8,9 @@
     "clean": "pnpm -r exec rm -rf dist node_modules",
     "build": "pnpm -r --filter './packages/*' run build",
     "test": "pnpm -r --filter './packages/*' run test",
-    "dev": "pnpm -r --filter './packages/*' --parallel run dev"
+    "dev": "pnpm -r --filter './packages/*' --parallel run dev",
+    "storybook": "pnpm --filter storybook storybook",
+    "build-storybook": "pnpm --filter storybook build"
   },
   "devDependencies": {
     "lerna": "^8.0.0",
@@ -26,6 +28,7 @@
     "schema",
     "engine",
     "theme",
+    "storybook",
     "monorepo"
   ],
   "author": "",

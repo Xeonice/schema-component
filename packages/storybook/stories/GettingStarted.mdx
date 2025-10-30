@@ -1,0 +1,140 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Getting Started" />
+
+# 快速开始
+
+本指南将帮助您快速上手 Schema Component。
+
+## 安装
+
+### 前置要求
+
+- Node.js 16+
+- pnpm 8+
+- TypeScript 5+
+
+### 安装依赖
+
+```bash
+# 克隆仓库
+git clone https://github.com/yourorg/schema-component.git
+cd schema-component
+
+# 安装依赖
+pnpm install
+
+# 构建所有包
+pnpm build
+```
+
+## 基础使用
+
+### 1. 定义 Schema
+
+```typescript
+import { defineSchema, field, relation } from '@schema-component/schema'
+
+const UserSchema = defineSchema('User', {
+  // 主键
+  id: field.uuid({ primary: true }),
+
+  // 基础字段
+  username: field.string({
+    minLength: 3,
+    maxLength: 20,
+    required: true,
+    unique: true
+  }),
+
+  email: field.email({
+    required: true,
+    unique: true
+  }),
+
+  age: field.integer({
+    min: 0,
+    max: 150
+  }),
+
+  // 时间戳
+  createdAt: field.timestamp({ autoCreate: true }),
+  updatedAt: field.timestamp({ autoUpdate: true }),
+
+  // 关联字段
+  posts: relation.many('Post', {
+    foreignKey: 'authorId'
+  })
+})
+```
+
+### 2. 类型推导
+
+```typescript
+import { Infer } from '@schema-component/schema'
+
+// 自动推导类型
+type User = Infer<typeof UserSchema>
+// => { id: string; username: string; email: string; age?: number; ... }
+```
+
+### 3. 数据验证
+
+```typescript
+// 验证数据
+const result = UserSchema.safeParse({
+  username: 'john_doe',
+  email: 'john@example.com',
+  age: 25
+})
+
+if (result.success) {
+  console.log('验证成功:', result.data)
+} else {
+  console.error('验证失败:', result.errors)
+}
+```
+
+### 4. 使用 Engine
+
+```typescript
+import { Engine } from '@schema-component/engine'
+
+const engine = new Engine({
+  schema: UserSchema,
+  // 配置选项
+})
+
+// 渲染组件
+engine.render()
+```
+
+### 5. 应用主题
+
+```typescript
+import { ThemeProvider } from '@schema-component/theme'
+
+function App() {
+  return (
+    <ThemeProvider theme="light">
+      {/* 您的应用 */}
+    </ThemeProvider>
+  )
+}
+```
+
+## 下一步
+
+- 📖 查看 [Schema 文档](/?path=/docs/schema-overview--docs) 了解详细的 Schema 定义
+- 🎨 查看 [Theme 文档](/?path=/docs/theme-overview--docs) 了解主题定制
+- 💡 查看 [Examples](/?path=/docs/examples-form-builder--docs) 学习实际应用
+
+## 需要帮助？
+
+- 查看 [API 文档](/?path=/docs/api-schema-api--docs)
+- 查看 [GitHub Issues](https://github.com/yourorg/schema-component/issues)
+- 加入 [Discord 社区](https://discord.gg/schema-component)
+
+---
+
+**准备好了吗？** 让我们开始探索 Schema Component 的强大功能！
