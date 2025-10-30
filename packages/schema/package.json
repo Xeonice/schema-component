@@ -1,0 +1,33 @@
+{
+  "name": "@schema-component/schema",
+  "version": "0.0.0",
+  "description": "Schema definition and validation for schema-component",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "test": "echo 'Testing schema package'"
+  },
+  "keywords": [
+    "schema",
+    "validation",
+    "definition"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
