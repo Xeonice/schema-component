@@ -1,12 +1,8 @@
-import type { StorybookConfig } from '@storybook/react-vite'
-import { mergeConfig } from 'vite'
-import path from 'path'
-import { fileURLToPath } from 'url'
+const path = require('path')
+const { mergeConfig } = require('vite')
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-const config: StorybookConfig = {
+/** @type {import('@storybook/react-vite').StorybookConfig} */
+const config = {
   // Story 文件匹配
   stories: [
     '../stories/**/*.mdx',
@@ -60,4 +56,4 @@ const config: StorybookConfig = {
   staticDirs: ['../public']
 }
 
-export default config
+module.exports = config
