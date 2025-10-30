@@ -1,0 +1,735 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Schema/API Reference" />
+
+# Schema API 参考手册
+
+完整的 Schema Component API 文档。
+
+> **技术栈**: 基于 **Zod** (核心验证引擎) 和 **TypeBox** (JSON Schema 序列化) 构建
+
+---
+
+## 字段类型 API
+
+### field.string()
+
+创建字符串类型字段。
+
+**选项:**
+
+```typescript
+interface StringFieldOptions {
+  minLength?: number          // 最小长度
+  maxLength?: number          // 最大长度
+  pattern?: RegExp | string   // 正则表达式验证
+  format?: 'email' | 'url' | 'uuid' | 'slug' | 'phone'
+  trim?: boolean              // 自动去除首尾空格
+  lowercase?: boolean         // 自动转小写
+  uppercase?: boolean         // 自动转大写
+  default?: string
+  required?: boolean
+  unique?: boolean
+  index?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+// 基础用法
+const name = field.string()
+
+// 带验证
+const username = field.string({
+  minLength: 3,
+  maxLength: 20,
+  pattern: /^[a-zA-Z0-9_]+$/,
+  required: true,
+  unique: true
+})
+
+// 邮箱
+const email = field.email({
+  lowercase: true,
+  trim: true
+})
+```
+
+**变体:**
+- `field.string()` - 基础字符串
+- `field.text()` - 长文本
+- `field.varchar(length)` - 可变长度字符串
+- `field.email()` - 邮箱
+- `field.url()` - URL
+- `field.uuid()` - UUID
+- `field.slug()` - URL slug
+
+---
+
+### field.number()
+
+创建数值类型字段。
+
+**选项:**
+
+```typescript
+interface NumberFieldOptions {
+  min?: number
+  max?: number
+  step?: number
+  precision?: number
+  scale?: number
+  positive?: boolean
+  negative?: boolean
+  default?: number
+  required?: boolean
+  unique?: boolean
+  index?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+// 整数
+const age = field.integer({ min: 0, max: 150 })
+
+// 浮点数
+const price = field.float({ min: 0, precision: 10, scale: 2 })
+
+// 精确小数（推荐用于货币）
+const amount = field.decimal(10, 2, { min: 0 })
+```
+
+**变体:**
+- `field.number()` - 基础数值
+- `field.integer()` - 整数
+- `field.float()` - 浮点数
+- `field.decimal(precision, scale)` - 精确小数
+- `field.positive()` - 正数
+- `field.nonNegative()` - 非负数
+
+---
+
+### field.boolean()
+
+创建布尔类型字段。
+
+**选项:**
+
+```typescript
+interface BooleanFieldOptions {
+  default?: boolean
+  required?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+const isActive = field.boolean({ default: true })
+const isPublished = field.boolean()
+```
+
+---
+
+### field.date() / field.datetime() / field.timestamp()
+
+创建日期/时间类型字段。
+
+**选项:**
+
+```typescript
+interface DateFieldOptions {
+  min?: Date | string
+  max?: Date | string
+  default?: Date | string | 'now'
+  required?: boolean
+  index?: boolean
+}
+
+interface TimestampFieldOptions extends DateFieldOptions {
+  autoCreate?: boolean        // 自动设置创建时间
+  autoUpdate?: boolean        // 自动更新时间
+}
+```
+
+**示例:**
+
+```typescript
+// 日期
+const birthDate = field.date({ max: new Date() })
+
+// 日期时间
+const publishedAt = field.datetime()
+
+// 时间戳
+const createdAt = field.timestamp({
+  autoCreate: true,
+  required: true
+})
+
+const updatedAt = field.timestamp({
+  autoUpdate: true
+})
+```
+
+---
+
+### field.enum()
+
+创建枚举类型字段。
+
+**选项:**
+
+```typescript
+interface EnumFieldOptions<T> {
+  values: T                   // 枚举值数组
+  default?: T[number]
+  required?: boolean
+  index?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+const status = field.enum({
+  values: ['pending', 'active', 'inactive'] as const,
+  default: 'pending'
+})
+
+// TypeScript 原生枚举
+enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user'
+}
+
+const role = field.nativeEnum(UserRole)
+```
+
+---
+
+### field.json()
+
+创建 JSON 类型字段。
+
+**选项:**
+
+```typescript
+interface JsonFieldOptions<T> {
+  schema?: Schema             // 嵌套 schema 验证
+  default?: T
+  required?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+// 基础 JSON
+const metadata = field.json({ default: {} })
+
+// 带 schema 验证
+const config = field.json({
+  schema: defineSchema('Config', {
+    theme: field.string(),
+    language: field.string()
+  })
+})
+
+// JSON 对象（结构化）
+const settings = field.jsonObject({ default: {} })
+
+// JSON 数组
+const items = field.jsonArray({ default: [] })
+```
+
+---
+
+### field.array()
+
+创建数组类型字段。
+
+**选项:**
+
+```typescript
+interface ArrayFieldOptions<T> {
+  items: T                    // 数组元素类型
+  minItems?: number
+  maxItems?: number
+  unique?: boolean            // 元素唯一
+  default?: any[]
+  required?: boolean
+}
+```
+
+**示例:**
+
+```typescript
+// 字符串数组
+const tags = field.array({
+  items: field.string(),
+  minItems: 1,
+  maxItems: 10,
+  unique: true
+})
+
+// 对象数组
+const items = field.array({
+  items: defineSchema('Item', {
+    name: field.string(),
+    quantity: field.integer()
+  })
+})
+
+// 便捷方法
+const tags = field.stringArray()
+const numbers = field.numberArray()
+```
+
+---
+
+## 关联字段 API
+
+### relation.one()
+
+创建一对一关联。
+
+**选项:**
+
+```typescript
+interface OneToOneOptions {
+  field?: string              // 当前模型的外键字段
+  references?: string         // 引用目标模型的字段
+  onDelete?: 'CASCADE' | 'SET_NULL' | 'RESTRICT' | 'NO_ACTION'
+  onUpdate?: 'CASCADE' | 'SET_NULL' | 'RESTRICT' | 'NO_ACTION'
+  required?: boolean
+  eager?: boolean             // 是否急加载
+}
+```
+
+**示例:**
+
+```typescript
+const profile = relation.one('Profile', {
+  field: 'userId',
+  references: 'id',
+  onDelete: 'CASCADE',
+  eager: true
+})
+```
+
+---
+
+### relation.many()
+
+创建一对多关联。
+
+**选项:**
+
+```typescript
+interface OneToManyOptions {
+  foreignKey?: string         // 目标模型的外键字段
+  references?: string         // 当前模型的引用字段
+  onDelete?: ReferentialAction
+  eager?: boolean
+  orderBy?: { field: string, order: 'ASC' | 'DESC' }
+}
+```
+
+**示例:**
+
+```typescript
+const posts = relation.many('Post', {
+  foreignKey: 'authorId',
+  references: 'id',
+  orderBy: { field: 'createdAt', order: 'DESC' }
+})
+```
+
+---
+
+### relation.belongsTo()
+
+创建多对一关联（反向）。
+
+**选项:**
+
+```typescript
+interface ManyToOneOptions {
+  foreignKey?: string         // 当前模型的外键字段
+  references?: string         // 目标模型的引用字段
+  required?: boolean
+  eager?: boolean
+  onDelete?: ReferentialAction
+}
+```
+
+**示例:**
+
+```typescript
+const author = relation.belongsTo('User', {
+  foreignKey: 'authorId',
+  references: 'id',
+  required: true,
+  eager: true
+})
+```
+
+---
+
+### relation.manyToMany()
+
+创建多对多关联。
+
+**选项:**
+
+```typescript
+interface ManyToManyOptions {
+  through: string | {
+    model: string               // 中间表模型名
+    from: string                // 源外键
+    to: string                  // 目标外键
+    extraFields?: Record<string, Field>
+  }
+  foreignKey?: string
+  otherKey?: string
+  eager?: boolean
+  orderBy?: { field: string, order: 'ASC' | 'DESC' }
+}
+```
+
+**示例:**
+
+```typescript
+// 简单方式
+const tags = relation.manyToMany('Tag', {
+  through: 'PostTags',
+  foreignKey: 'postId',
+  otherKey: 'tagId'
+})
+
+// 带额外字段
+const roles = relation.manyToMany('Role', {
+  through: {
+    model: 'UserRoles',
+    from: 'userId',
+    to: 'roleId',
+    extraFields: {
+      assignedAt: field.timestamp({ autoCreate: true })
+    }
+  }
+})
+```
+
+---
+
+## Schema 定义 API
+
+### defineSchema()
+
+定义一个 Schema。
+
+**签名:**
+
+```typescript
+function defineSchema<T extends FieldDefinitions>(
+  name: string,
+  fields: T,
+  options?: SchemaOptions
+): Schema<T>
+```
+
+**选项:**
+
+```typescript
+interface SchemaOptions {
+  version?: number            // Schema 版本
+  tableName?: string          // 自定义表名
+  timestamps?: boolean        // 自动添加时间戳字段
+  softDelete?: boolean        // 软删除支持
+  indexes?: IndexDefinition[]
+  description?: string
+}
+```
+
+**示例:**
+
+```typescript
+const UserSchema = defineSchema('User', {
+  id: field.uuid({ primary: true }),
+  username: field.string({ required: true, unique: true }),
+  email: field.email({ required: true, unique: true }),
+
+  posts: relation.many('Post', { foreignKey: 'authorId' })
+}, {
+  timestamps: true,
+  softDelete: true,
+  indexes: [
+    { fields: ['email'], unique: true },
+    { fields: ['username'], unique: true }
+  ]
+})
+```
+
+---
+
+### Schema 方法
+
+#### extend()
+
+扩展 Schema，添加新字段。
+
+```typescript
+const ExtendedUserSchema = UserSchema.extend({
+  avatar: field.url(),
+  phoneNumber: field.phone()
+})
+```
+
+#### pick()
+
+选择部分字段创建新 Schema。
+
+```typescript
+const UserPublicSchema = UserSchema.pick(['id', 'username', 'email'])
+```
+
+#### omit()
+
+排除部分字段创建新 Schema。
+
+```typescript
+const UserSafeSchema = UserSchema.omit(['password', 'deletedAt'])
+```
+
+#### partial()
+
+将所有字段设为可选。
+
+```typescript
+const UserUpdateSchema = UserSchema.partial()
+```
+
+#### required()
+
+将所有字段设为必填。
+
+```typescript
+const StrictUserSchema = UserSchema.required()
+```
+
+---
+
+## 验证 API
+
+### safeParse()
+
+安全验证，返回结果对象。
+
+```typescript
+const result = UserSchema.safeParse(data)
+
+if (result.success) {
+  console.log(result.data)
+} else {
+  console.error(result.errors)
+}
+```
+
+### parse()
+
+验证并解析，失败时抛出异常。
+
+```typescript
+try {
+  const user = UserSchema.parse(data)
+  console.log(user)
+} catch (error) {
+  if (error instanceof ValidationException) {
+    console.error(error.format())
+  }
+}
+```
+
+### validateAsync()
+
+异步验证（支持异步验证规则）。
+
+```typescript
+const result = await UserSchema.validateAsync(data)
+```
+
+### validatePartial()
+
+部分字段验证。
+
+```typescript
+const result = UserSchema.validatePartial({
+  email: 'new@example.com'
+}, {
+  fields: ['email']
+})
+```
+
+---
+
+## 类型工具 API
+
+### Infer&lt;T&gt;
+
+推导 Schema 的 TypeScript 类型。
+
+```typescript
+type User = Infer<typeof UserSchema>
+```
+
+### InferInput&lt;T&gt;
+
+推导输入类型（创建时）。
+
+```typescript
+type UserInput = InferInput<typeof UserSchema>
+// 排除自动生成字段: id, createdAt, updatedAt
+```
+
+### InferOutput&lt;T&gt;
+
+推导输出类型（包含计算字段）。
+
+```typescript
+type UserOutput = InferOutput<typeof UserSchema>
+```
+
+---
+
+## withOption()
+
+为字段添加高级选项。
+
+**签名:**
+
+```typescript
+function withOption<T extends Field>(
+  field: T,
+  options: FieldOptions
+): T & { options: FieldOptions }
+```
+
+**选项:**
+
+```typescript
+interface FieldOptions {
+  required?: boolean
+  default?: any
+  unique?: boolean
+  index?: boolean
+  validate?: ValidateFunction | ValidateFunction[]
+  transform?: TransformFunction
+  errorMessages?: Record<string, string>
+  label?: string
+  description?: string
+  column?: string             // 自定义数据库列名
+  comment?: string
+}
+```
+
+**示例:**
+
+```typescript
+const email = withOption(field.email(), {
+  required: true,
+  unique: true,
+  errorMessages: {
+    required: '邮箱不能为空',
+    invalid: '邮箱格式不正确',
+    unique: '该邮箱已被注册'
+  },
+  label: '邮箱地址',
+  description: '用于登录和接收通知'
+})
+
+// 链式调用
+const name = field.string()
+  .withOption({ minLength: 2 })
+  .withOption({ maxLength: 50 })
+  .withOption({ required: true })
+```
+
+---
+
+## 自定义验证规则
+
+### defineRule()
+
+定义自定义验证规则。
+
+```typescript
+const uniqueEmailRule = defineRule<string>({
+  name: 'uniqueEmail',
+  async validate(value, context) {
+    const exists = await db.users.findOne({ email: value })
+    if (exists) {
+      return {
+        valid: false,
+        message: '该邮箱已被注册'
+      }
+    }
+    return { valid: true }
+  }
+})
+
+// 使用规则
+const email = withOption(field.email(), {
+  validate: [uniqueEmailRule]
+})
+```
+
+---
+
+## Schema 序列化
+
+### toJSONSchema()
+
+导出为 JSON Schema。
+
+```typescript
+const jsonSchema = UserSchema.toJSONSchema()
+```
+
+### toOpenAPI()
+
+导出为 OpenAPI Schema。
+
+```typescript
+const openApiSchema = UserSchema.toOpenAPI()
+```
+
+### toPrisma()
+
+导出为 Prisma Schema。
+
+```typescript
+const prismaSchema = UserSchema.toPrisma()
+```
+
+### toTypeBox()
+
+转换为 TypeBox Schema（高性能验证）。
+
+```typescript
+import { toTypeBox } from '@schema-component/schema'
+
+const typeBoxSchema = toTypeBox(UserSchema)
+```
+
+---
+
+## 参考链接
+
+- **Zod 文档**: https://zod.dev
+- **TypeBox 文档**: https://github.com/sinclairzx81/typebox
+- **完整示例**: 查看 [Complete Examples](/story/schema-complete-examples)
+- **最佳实践**: 查看 [Best Practices](/story/schema-best-practices)

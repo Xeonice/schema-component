@@ -4,7 +4,45 @@ import { Meta } from '@storybook/blocks'
 
 # Schema 包概述
 
-`@schema-component/schema` 是 Schema Component 的核心包，提供强大的 Schema 定义和验证功能。
+`@schema-component/schema` 是 Schema Component 的核心包，提供类型安全、高性能、易于使用的数据模式定义与验证框架。
+
+## 设计理念
+
+### 核心目标
+
+- **完整的类型系统**: 支持所有基础数据类型和关联关系
+- **强大的关联字段**: 完整支持 o2o, o2m, m2o, m2m 四种关联类型
+- **灵活的配置选项**: 通过 withOption 提供链式配置能力
+- **TypeScript 原生**: 深度集成 TypeScript 类型推导
+- **运行时验证**: 基于 Zod 的强大验证引擎
+- **可扩展架构**: 支持 Schema 组合、继承和自定义规则
+
+### 技术架构
+
+#### 混合架构：Zod + TypeBox
+
+经过对主流 TypeScript Schema 验证库的深入调研，本系统采用混合架构：
+
+**⚡ Zod 作为核心验证引擎**
+- ✅ 成熟稳定，社区生态完善
+- ✅ 优秀的 TypeScript 类型推导
+- ✅ 完整的 API 设计和文档
+- ✅ 广泛的第三方集成（tRPC、React Hook Form 等）
+- ✅ 丰富的验证功能和错误处理
+
+**📦 TypeBox 作为 JSON Schema 桥接**
+- ⚡ 极致性能（最快的验证库）
+- 📋 完全符合 JSON Schema 标准
+- 🔗 支持 OpenAPI 文档生成
+- 🌐 适合 API 和跨平台场景
+
+**💡 架构优势**
+- 内部使用 Zod：利用其强大的验证和类型推导能力
+- 对外暴露标准：通过 TypeBox 输出标准 JSON Schema
+- 类型安全与标准兼得：两全其美的解决方案
+- 成熟生态支持：无缝集成主流工具链
+
+---
 
 ## 核心概念
 
@@ -126,19 +164,103 @@ type User = Infer<typeof UserSchema>
 
 支持导出为 JSON Schema、OpenAPI、Prisma 等标准格式。
 
+## 高级特性
+
+### Schema 组合与继承
+
+通过组合可复用字段组，避免重复定义：
+
+```typescript
+// 可复用字段组
+const TimestampFields = {
+  createdAt: field.timestamp({ autoCreate: true }),
+  updatedAt: field.timestamp({ autoUpdate: true })
+}
+
+// 组合使用
+const PostSchema = defineSchema('Post', {
+  id: field.uuid({ primary: true }),
+  title: field.string({ required: true }),
+  ...TimestampFields
+})
+
+// 扩展 Schema
+const FeaturedPostSchema = PostSchema.extend({
+  featured: field.boolean({ default: false })
+})
+```
+
+### 虚拟字段
+
+定义不存储在数据库中的计算字段：
+
+```typescript
+const PersonSchema = defineSchema('Person', {
+  firstName: field.string(),
+  lastName: field.string(),
+
+  // 虚拟字段 - 自动计算
+  fullName: field.virtual({
+    get: (person) => `${person.firstName} ${person.lastName}`
+  })
+})
+```
+
+### 条件验证
+
+根据其他字段的值动态调整验证规则：
+
+```typescript
+const OrderSchema = defineSchema('Order', {
+  type: field.enum({ values: ['pickup', 'delivery'] as const }),
+
+  // 当 type 为 delivery 时，address 必填
+  address: withOption(field.string(), {
+    required: (data) => data.type === 'delivery'
+  })
+})
+```
+
+---
+
+## 学习路径
+
+推荐按以下顺序学习：
+
+1. **基础使用** → 了解基础字段类型和 Schema 定义
+2. **关联关系** → 学习四种关联类型的使用
+3. **高级特性** → 掌握 withOption、Schema 组合、虚拟字段
+4. **完整示例** → 通过实际项目案例（博客、电商）深入理解
+5. **API 参考** → 查阅完整的 API 文档
+6. **最佳实践** → 学习推荐的设计模式和优化技巧
+
+---
+
 ## 深入学习
 
 探索更多内容：
 
-- [Basic Fields](/?path=/docs/schema-basic-fields--docs) - 基础字段详解
-- [Relation Fields](/?path=/docs/schema-relation-fields--docs) - 关联字段详解
-- [Validation](/?path=/docs/schema-validation--docs) - 验证系统
-- [Type Inference](/?path=/docs/schema-type-inference--docs) - 类型推导
-
-## API 参考
-
-查看完整的 [Schema API 文档](/?path=/docs/api-schema-api--docs)。
+- 📖 **[Complete Examples](/story/schema-complete-examples--basic-user)** - 完整示例集
+- 📚 **[API Reference](/story/schema-api-reference)** - 完整的 API 文档
+- 💡 **[Best Practices](/story/schema-best-practices)** - 最佳实践指南
+- 🟦 **[Basic Fields](/story/schema-basic-fields--string)** - 基础字段详解
+- 🟪 **[Relation Fields](/story/schema-relation-fields--belongs-to)** - 关联字段详解
+- ✅ **[Validation](/story/schema-validation--required-validation)** - 验证系统
+- 🔤 **[Type Inference](/story/schema-type-inference--basic-inference)** - 类型推导
 
 ---
 
-**技术栈**: 基于 Zod 构建，提供成熟稳定的验证功能。
+## 总结
+
+Schema Component 提供了一个完整、类型安全、高性能的 Schema 系统，核心特性包括：
+
+✅ **完整的类型系统** - 支持所有常见基础类型和关联类型
+✅ **灵活的 API** - 链式调用、withOption 包装、类型推导
+✅ **强大的验证** - 基于 Zod，支持同步/异步、自定义规则
+✅ **互操作性** - JSON Schema、TypeBox、OpenAPI、Prisma
+✅ **成熟生态** - 与 tRPC、React Hook Form 等工具无缝集成
+✅ **可扩展** - Schema 组合、继承、虚拟字段、条件验证
+
+---
+
+**技术栈**: 基于 **Zod** (核心验证引擎) 和 **TypeBox** (JSON Schema 序列化) 构建

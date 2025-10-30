@@ -1,13 +1,16 @@
 import type { StorybookConfig } from '@storybook/react-vite'
 import { mergeConfig } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const config: StorybookConfig = {
   // Story 文件匹配
   stories: [
     '../stories/**/*.mdx',
-    '../stories/**/*.stories.@(js|jsx|mjs|ts|tsx)',
-    '../docs/**/*.mdx'
+    '../stories/**/*.stories.@(js|jsx|mjs|ts|tsx)'
   ],
 
   // 插件配置

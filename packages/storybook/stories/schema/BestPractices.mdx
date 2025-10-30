@@ -1,0 +1,677 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Schema/Best Practices" />
+
+# Schema 最佳实践指南
+
+编写高质量、可维护的 Schema 的最佳实践和设计模式。
+
+> **技术栈**: 基于 **Zod** (核心验证) 和 **TypeBox** (JSON Schema) 构建
+
+---
+
+## Schema 设计原则
+
+### 1. 单一职责原则
+
+每个 Schema 应该只负责一个实体的定义。
+
+```typescript
+// ✅ 好的做法
+const UserSchema = defineSchema('User', {
+  id: field.uuid(),
+  username: field.string(),
+  email: field.email()
+})
+
+const ProfileSchema = defineSchema('Profile', {
+  id: field.uuid(),
+  bio: field.text(),
+  avatar: field.url()
+})
+
+// ❌ 不好的做法
+const UserWithEverythingSchema = defineSchema('User', {
+  id: field.uuid(),
+  username: field.string(),
+  email: field.email(),
+  bio: field.text(),           // 应该在 Profile 中
+  avatar: field.url(),         // 应该在 Profile 中
+  orderHistory: field.array()  // 应该通过关联处理
+})
+```
+
+---
+
+### 2. DRY (Don't Repeat Yourself)
+
+使用组合和继承避免重复定义。
+
+```typescript
+// ✅ 好的做法 - 可复用的字段组
+const TimestampFields = {
+  createdAt: field.timestamp({ autoCreate: true }),
+  updatedAt: field.timestamp({ autoUpdate: true })
+}
+
+const SoftDeleteFields = {
+  deletedAt: field.timestamp({ nullable: true }),
+  isDeleted: field.boolean({ default: false })
+}
+
+const PostSchema = defineSchema('Post', {
+  id: field.uuid(),
+  title: field.string(),
+  ...TimestampFields,
+  ...SoftDeleteFields
+})
+
+const CommentSchema = defineSchema('Comment', {
+  id: field.uuid(),
+  content: field.text(),
+  ...TimestampFields,
+  ...SoftDeleteFields
+})
+```
+
+---
+
+### 3. 明确的命名约定
+
+使用清晰、一致的命名。
+
+```typescript
+// ✅ 好的做法
+const UserSchema = defineSchema('User', {
+  id: field.uuid(),
+  firstName: field.string(),    // 使用驼峰命名
+  lastName: field.string(),
+  emailAddress: field.email(),  // 明确的名称
+  isActive: field.boolean(),    // 布尔值使用 is/has 前缀
+  createdAt: field.timestamp()  // 日期使用 At 后缀
+})
+
+// ❌ 不好的做法
+const UserSchema = defineSchema('User', {
+  id: field.uuid(),
+  fname: field.string(),        // 缩写不清晰
+  lname: field.string(),
+  mail: field.email(),          // 不明确
+  active: field.boolean(),      // 应该是 isActive
+  created: field.timestamp()    // 应该是 createdAt
+})
+```
+
+---
+
+### 4. 使用适当的字段类型
+
+选择最精确的字段类型。
+
+```typescript
+// ✅ 好的做法
+const ProductSchema = defineSchema('Product', {
+  sku: field.varchar(50),              // 使用 varchar 限制长度
+  price: field.decimal(10, 2),         // 价格使用 decimal
+  stock: field.integer(),              // 库存使用 integer
+  status: field.enum({                 // 状态使用 enum
+    values: ['draft', 'active', 'archived'] as const
+  }),
+  tags: field.array({                  // 标签使用 array
+    items: field.string()
+  })
+})
+
+// ❌ 不好的做法
+const ProductSchema = defineSchema('Product', {
+  sku: field.string(),                 // 应该限制长度
+  price: field.float(),                // 浮点数不精确
+  stock: field.number(),               // 应该是 integer
+  status: field.string(),              // 应该使用 enum
+  tags: field.string()                 // 应该使用 array
+})
+```
+
+---
+
+## 字段定义最佳实践
+
+### 1. 始终明确 required
+
+明确字段是否必填。
+
+```typescript
+// ✅ 好的做法
+const UserSchema = defineSchema('User', {
+  email: field.email({ required: true }),
+  name: field.string({ required: true }),
+  bio: field.text({ required: false })  // 或者不设置（默认 false）
+})
+```
+
+---
+
+### 2. 为枚举类型使用 as const
+
+确保类型推导正确。
+
+```typescript
+// ✅ 好的做法
+const status = field.enum({
+  values: ['pending', 'active', 'inactive'] as const
+})
+// 类型: 'pending' | 'active' | 'inactive'
+
+// ❌ 不好的做法
+const status = field.enum({
+  values: ['pending', 'active', 'inactive']
+})
+// 类型: string[]
+```
+
+---
+
+### 3. 使用 withOption 提供完整元数据
+
+```typescript
+// ✅ 好的做法
+const email = withOption(field.email(), {
+  required: true,
+  unique: true,
+  errorMessages: {
+    required: '邮箱不能为空',
+    invalid: '邮箱格式不正确',
+    unique: '该邮箱已被注册'
+  },
+  label: '邮箱地址',
+  description: '用于登录和接收通知'
+})
+```
+
+---
+
+### 4. 设置合理的长度和范围限制
+
+```typescript
+// ✅ 好的做法
+const UserSchema = defineSchema('User', {
+  username: field.string({
+    minLength: 3,
+    maxLength: 20
+  }),
+  age: field.integer({
+    min: 0,
+    max: 150
+  }),
+  bio: field.text({
+    maxLength: 500
+  })
+})
+```
+
+---
+
+## 关联关系设计
+
+### 1. 明确的外键命名
+
+使用 `{关联对象}Id` 模式。
+
+```typescript
+// ✅ 好的做法
+const PostSchema = defineSchema('Post', {
+  authorId: field.uuid({ required: true }),
+  author: relation.belongsTo('User', {
+    foreignKey: 'authorId'
+  }),
+
+  categoryId: field.uuid(),
+  category: relation.belongsTo('Category', {
+    foreignKey: 'categoryId'
+  })
+})
+
+// ❌ 不好的做法
+const PostSchema = defineSchema('Post', {
+  user_id: field.uuid(),        // 命名不一致
+  cat: field.uuid()             // 不清晰
+})
+```
+
+---
+
+### 2. 设置合适的删除策略
+
+根据业务逻辑选择 onDelete 策略。
+
+```typescript
+// 用户删除时，级联删除所有文章
+const posts = relation.many('Post', {
+  foreignKey: 'authorId',
+  onDelete: 'CASCADE'
+})
+
+// 分类删除时，文章的 categoryId 设为 NULL
+const category = relation.belongsTo('Category', {
+  foreignKey: 'categoryId',
+  onDelete: 'SET_NULL'
+})
+
+// 订单有商品时，不允许删除商品
+const product = relation.belongsTo('Product', {
+  foreignKey: 'productId',
+  onDelete: 'RESTRICT'
+})
+```
+
+---
+
+### 3. 避免循环依赖
+
+```typescript
+// ✅ 好的做法 - 通过中间表
+const UserSchema = defineSchema('User', {
+  id: field.uuid(),
+  followers: relation.manyToMany('User', {
+    through: 'UserFollowers',
+    foreignKey: 'userId',
+    otherKey: 'followerId'
+  })
+})
+
+// ❌ 不好的做法 - 直接循环
+// 会导致类型推导问题
+```
+
+---
+
+### 4. 合理使用 eager 加载
+
+```typescript
+// 常用的关联使用 eager
+const author = relation.belongsTo('User', {
+  foreignKey: 'authorId',
+  eager: true  // 查询文章时自动加载作者
+})
+
+// 大量数据的关联不使用 eager
+const posts = relation.many('Post', {
+  foreignKey: 'authorId',
+  eager: false  // 避免 N+1 问题
+})
+```
+
+---
+
+## 验证策略
+
+### 1. 分层验证
+
+在不同层次进行验证。
+
+```typescript
+// 字段级验证
+const email = field.email({
+  required: true,
+  format: 'email'
+})
+
+// Schema 级验证
+const UserSchema = defineSchema('User', {
+  password: field.string({ minLength: 8 }),
+  confirmPassword: field.string()
+}, {
+  validate: (data) => {
+    if (data.password !== data.confirmPassword) {
+      return {
+        field: 'confirmPassword',
+        message: '两次密码输入不一致'
+      }
+    }
+    return true
+  }
+})
+```
+
+---
+
+### 2. 使用自定义验证规则
+
+将复杂验证逻辑封装为规则。
+
+```typescript
+// ✅ 好的做法
+const strongPasswordRule = defineRule<string>({
+  name: 'strongPassword',
+  validate(value) {
+    if (!/[A-Z]/.test(value)) {
+      return { valid: false, message: '必须包含大写字母' }
+    }
+    if (!/[a-z]/.test(value)) {
+      return { valid: false, message: '必须包含小写字母' }
+    }
+    if (!/[0-9]/.test(value)) {
+      return { valid: false, message: '必须包含数字' }
+    }
+    return { valid: true }
+  }
+})
+
+const password = withOption(field.string(), {
+  validate: [strongPasswordRule]
+})
+```
+
+---
+
+### 3. 最小化异步验证
+
+异步验证影响性能，尽量减少使用。
+
+```typescript
+// ✅ 好的做法 - 只在必要时使用
+const email = withOption(field.email(), {
+  validate: [
+    // 同步验证在前
+    (v) => v.length <= 100 || '邮箱过长',
+    // 异步验证在后
+    async (v) => {
+      const exists = await checkEmailExists(v)
+      return !exists || '邮箱已被注册'
+    }
+  ]
+})
+```
+
+---
+
+## 性能优化
+
+### 1. 使用索引
+
+为常查询字段添加索引。
+
+```typescript
+const UserSchema = defineSchema('User', {
+  email: field.email({
+    unique: true,
+    index: true  // 添加索引
+  }),
+  username: field.string({
+    unique: true,
+    index: true
+  })
+}, {
+  indexes: [
+    { fields: ['email'], unique: true },
+    { fields: ['username'], unique: true },
+    { fields: ['createdAt'] }  // 按创建时间排序时使用
+  ]
+})
+```
+
+---
+
+### 2. 懒加载大字段
+
+对于大文本或 JSON 字段，使用懒加载。
+
+```typescript
+// ✅ 好的做法
+const PostSchema = defineSchema('Post', {
+  title: field.string(),
+  excerpt: field.text({ maxLength: 200 }),  // 摘要字段
+  content: field.text()  // 完整内容懒加载
+})
+
+// 只查询摘要
+const posts = await db.posts.findMany({
+  select: { id: true, title: true, excerpt: true }
+})
+```
+
+---
+
+### 3. 避免 N+1 查询
+
+使用 include 预加载关联数据。
+
+```typescript
+// ❌ 不好的做法 - N+1 查询
+const posts = await db.posts.findMany()
+for (const post of posts) {
+  post.author = await db.users.findOne({ id: post.authorId })
+}
+
+// ✅ 好的做法 - 预加载
+const posts = await db.posts.findMany({
+  include: { author: true }
+})
+```
+
+---
+
+### 4. 使用选择性查询
+
+只查询需要的字段。
+
+```typescript
+// ✅ 好的做法
+const users = await db.users.findMany({
+  select: {
+    id: true,
+    username: true,
+    email: true
+    // 不查询 password, bio 等字段
+  }
+})
+```
+
+---
+
+## 错误处理
+
+### 1. 提供友好的错误消息
+
+```typescript
+// ✅ 好的做法
+const email = withOption(field.email(), {
+  errorMessages: {
+    required: '请输入邮箱地址',
+    invalid: '邮箱格式不正确，请检查后重试',
+    unique: '该邮箱已被注册，请使用其他邮箱'
+  }
+})
+```
+
+---
+
+### 2. 统一错误处理
+
+```typescript
+function handleValidationError(error: ValidationException) {
+  if (error instanceof ValidationException) {
+    // 格式化为 UI 友好的格式
+    const formatted = error.format()
+    return {
+      success: false,
+      errors: formatted
+    }
+  }
+  throw error
+}
+
+// 使用
+try {
+  const user = UserSchema.parse(data)
+} catch (error) {
+  return handleValidationError(error)
+}
+```
+
+---
+
+### 3. 错误分类
+
+区分不同类型的错误。
+
+```typescript
+// 验证错误
+if (error.code === 'VALIDATION_ERROR') {
+  // 显示表单错误
+}
+
+// 唯一性约束错误
+if (error.code === 'UNIQUE_CONSTRAINT') {
+  // 提示用户数据已存在
+}
+
+// 外键约束错误
+if (error.code === 'FOREIGN_KEY_CONSTRAINT') {
+  // 提示关联数据不存在
+}
+```
+
+---
+
+## 类型安全
+
+### 1. 充分利用类型推导
+
+```typescript
+// ✅ 好的做法
+import { Infer } from '@schema-component/schema'
+
+const UserSchema = defineSchema('User', {
+  id: field.uuid(),
+  name: field.string({ required: true }),
+  age: field.integer()
+})
+
+// 自动推导类型
+type User = Infer<typeof UserSchema>
+
+// 函数参数使用推导类型
+function createUser(data: Infer<typeof UserSchema>) {
+  // TypeScript 完全类型安全
+  return UserSchema.parse(data)
+}
+```
+
+---
+
+### 2. 使用工具类型
+
+```typescript
+// 创建输入类型（排除自动生成字段）
+type UserInput = InferInput<typeof UserSchema>
+
+// 更新类型（所有字段可选）
+type UserUpdate = Partial<Infer<typeof UserSchema>>
+
+// 公开类型（排除敏感字段）
+type UserPublic = Omit<Infer<typeof UserSchema>, 'password'>
+```
+
+---
+
+### 3. 泛型约束
+
+```typescript
+function findById<T extends Schema>(
+  schema: T,
+  id: string
+): Promise<Infer<T> | null> {
+  // 类型安全的查询
+  return db.findOne(schema, { id })
+}
+```
+
+---
+
+## 常见陷阱与解决方案
+
+### ❌ 陷阱 1: 忘记定义外键字段
+
+```typescript
+// ❌ 错误
+const PostSchema = defineSchema('Post', {
+  author: relation.belongsTo('User')  // 缺少 authorId
+})
+
+// ✅ 正确
+const PostSchema = defineSchema('Post', {
+  authorId: field.uuid({ required: true }),
+  author: relation.belongsTo('User', {
+    foreignKey: 'authorId'
+  })
+})
+```
+
+---
+
+### ❌ 陷阱 2: 循环导入
+
+```typescript
+// ❌ 错误 - 文件 A 和 B 相互导入
+// fileA.ts
+import { SchemaB } from './fileB'
+export const SchemaA = defineSchema('A', { b: relation.belongsTo('B') })
+
+// fileB.ts
+import { SchemaA } from './fileA'
+export const SchemaB = defineSchema('B', { a: relation.belongsTo('A') })
+
+// ✅ 正确 - 使用字符串引用
+// fileA.ts
+export const SchemaA = defineSchema('A', {
+  b: relation.belongsTo('B')  // 字符串引用
+})
+```
+
+---
+
+### ❌ 陷阱 3: 浮点数精度问题
+
+```typescript
+// ❌ 错误 - 使用 float 存储货币
+const price = field.float()
+
+// ✅ 正确 - 使用 decimal
+const price = field.decimal(10, 2)  // 10 位数字，2 位小数
+```
+
+---
+
+### ❌ 陷阱 4: N+1 查询问题
+
+```typescript
+// ❌ 错误
+const posts = await db.posts.findMany()
+for (const post of posts) {
+  post.author = await db.users.findOne({ id: post.authorId })
+}
+
+// ✅ 正确
+const posts = await db.posts.findMany({
+  include: { author: true }
+})
+```
+
+---
+
+## 总结
+
+遵循这些最佳实践可以帮助你：
+
+- ✅ 编写清晰、可维护的 Schema
+- ✅ 避免常见的设计陷阱
+- ✅ 提升应用性能
+- ✅ 确保类型安全
+- ✅ 提供良好的用户体验
+
+## 参考资源
+
+- **API 参考**: 查看 [API Reference](/story/schema-api-reference)
+- **完整示例**: 查看 [Complete Examples](/story/schema-complete-examples)
+- **设计理念**: 查看 [Overview](/story/schema-overview)
