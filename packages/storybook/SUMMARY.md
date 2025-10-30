@@ -9,6 +9,22 @@
 
 ## 🔄 更新记录
 
+### 2025-10-30 - 升级到 Storybook 9.x + pnpm ✅
+
+升级 Storybook 版本并切换包管理器：
+
+**版本升级**：
+- Storybook 核心: 7.6.0 → 9.1.16
+- Storybook 插件: 7.6.0 → 9.0.0-alpha.12
+- TypeScript: 5.3.3 → 5.6.3
+- Vite: 5.0.0 → 6.0.7
+- storybook-dark-mode: 3.0.0 → 4.0.2
+
+**包管理器**：
+- 全面切换到 pnpm
+- 更新所有脚本使用 `pnpm dlx` 替代 `npx`
+- 简化配置以兼容 Storybook 10
+
 ### 2025-10-30 - Phase 2 Schema Stories 完成 ✅
 
 完成了 Schema Package 的所有 Stories，新增 3 个 Story 文件：
@@ -83,11 +99,12 @@ Storybook Package 是整个 Schema Component 项目的：
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Storybook | 7.6+ | 核心框架 |
+| Storybook | 9.1+ | 核心框架 |
 | React | 18.2+ | UI 框架 |
-| TypeScript | 5.3+ | 类型系统 |
-| Vite | 5.0+ | 构建工具 |
-| MDX | 2.3+ | 文档格式 |
+| TypeScript | 5.6+ | 类型系统 |
+| Vite | 6.0+ | 构建工具 |
+| MDX | 3.0 | 文档格式 |
+| pnpm | 8.0+ | 包管理器 |
 
 ---
 

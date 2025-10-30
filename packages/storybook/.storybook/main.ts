@@ -24,33 +24,16 @@ const config: StorybookConfig = {
   // 框架配置
   framework: {
     name: '@storybook/react-vite',
-    options: {
-      builder: {
-        viteConfigPath: '../vite.config.ts'
-      }
-    }
+    options: {}
   },
 
   // 文档配置
-  docs: {
-    autodocs: 'tag',
-    defaultName: 'Documentation'
-  },
+  docs: {},
 
   // TypeScript 配置
   typescript: {
-    check: true,
-    reactDocgen: 'react-docgen-typescript',
-    reactDocgenTypescriptOptions: {
-      shouldExtractLiteralValuesFromEnum: true,
-      shouldRemoveUndefinedFromOptional: true,
-      propFilter: (prop) => {
-        // 过滤掉 node_modules 中的 props
-        return prop.parent
-          ? !/node_modules/.test(prop.parent.fileName)
-          : true
-      }
-    }
+    check: false,
+    reactDocgen: 'react-docgen-typescript'
   },
 
   // Vite 配置定制

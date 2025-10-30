@@ -132,7 +132,7 @@ export const Primary: Story = {
 pnpm build
 
 # 部署（需要 Vercel CLI）
-vercel --prod
+pnpm dlx vercel --prod
 ```
 
 ### Netlify
@@ -142,12 +142,14 @@ vercel --prod
 pnpm build
 
 # 部署到 dist 目录
-netlify deploy --prod --dir=dist
+pnpm dlx netlify-cli deploy --prod --dir=dist
 ```
 
 ### GitHub Pages
 
 参考 `.github/workflows/deploy-storybook.yml`（需要创建）。
+
+> 注意：所有部署都使用 pnpm 作为包管理器。
 
 ## 开发指南
 
@@ -177,11 +179,12 @@ netlify deploy --prod --dir=dist
 
 ## 技术栈
 
-- Storybook 7.6+
-- React 18
-- TypeScript 5.3
-- Vite 5.0
-- MDX 2.3
+- Storybook 9.1+ (核心) / 9.0-alpha (插件)
+- React 18.2+
+- TypeScript 5.6+
+- Vite 6.0+
+- MDX 3.0
+- pnpm 8.0+
 
 ## 许可证
 
