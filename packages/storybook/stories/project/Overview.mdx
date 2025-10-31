@@ -1,0 +1,220 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Project/Overview" />
+
+# Schema Component 项目概览
+
+欢迎来到 Schema Component 项目！这是一个强大的、基于 Schema 驱动的组件系统，采用 Lerna monorepo 架构构建。
+
+## 🎯 项目愿景
+
+构建一个**框架无关**、**类型安全**、**高度可扩展**的 Schema 驱动组件系统，使开发者能够通过声明式的 Schema 定义快速构建复杂的应用程序。
+
+## 🏗️ 技术架构
+
+### Monorepo 结构
+
+项目采用 Lerna + pnpm workspaces 的 monorepo 架构，包含以下核心包：
+
+```
+schema-component/
+├── packages/
+│   ├── @schema-component/schema    # Schema 定义和验证层
+│   ├── @schema-component/engine    # 核心渲染引擎
+│   ├── @schema-component/theme     # 主题系统
+│   └── @schema-component/storybook # 文档和示例
+```
+
+### 技术栈
+
+- **包管理**: pnpm + Lerna
+- **构建工具**: Vite
+- **语言**: TypeScript 5.6+
+- **测试**: Vitest
+- **文档**: Storybook 8.6
+- **状态管理**: MobX 6.13+
+- **依赖注入**: InversifyJS 6.0+
+- **事件系统**: EventEmitter3 5.0+
+
+## 📦 核心包介绍
+
+### @schema-component/schema
+
+**用途**: Schema 定义和验证层
+
+**核心功能**:
+- ✅ 字段类型定义（string, number, boolean, date, etc.）
+- ✅ 字段验证（required, min, max, pattern, etc.）
+- ✅ 关系字段（belongsTo, hasMany, hasOne）
+- ✅ 类型推导和 TypeScript 支持
+- ✅ 自定义验证规则
+
+**文档**: [Schema System](/docs/schema-overview)
+
+### @schema-component/engine
+
+**用途**: 核心数据引擎，基于 DDD 原则
+
+**核心功能**:
+- ✅ 函数式优先设计（APIs/Actions/Views 都是可执行函数）
+- ✅ 分层架构（Model、Repository、State、Data Access、Render）
+- ✅ 依赖注入容器
+- ✅ 事件驱动系统
+- ✅ 响应式状态管理（MobX）
+- ✅ 框架无关的渲染系统
+
+**文档**: [Engine Architecture](/docs/engine-overview)
+
+**示例**: 108 个交互式代码示例
+
+### @schema-component/theme
+
+**用途**: 主题系统和样式管理
+
+**核心功能**:
+- 🚧 主题定义和切换
+- 🚧 CSS-in-JS 支持
+- 🚧 设计令牌系统
+- 🚧 暗黑模式支持
+
+**状态**: 开发中
+
+### @schema-component/storybook
+
+**用途**: 文档、示例和组件展示
+
+**内容**:
+- 📚 145+ 个交互式示例
+- 📖 完整的架构设计文档
+- 🎨 组件使用指南
+- 📝 最佳实践
+
+## 🚀 快速开始
+
+### 安装依赖
+
+```bash
+git clone https://github.com/Xeonice/schema-component.git
+cd schema-component
+pnpm install
+```
+
+### 开发模式
+
+```bash
+# 启动所有包的开发模式
+pnpm run dev
+
+# 启动 Storybook
+pnpm storybook
+```
+
+### 构建
+
+```bash
+# 构建所有包
+pnpm run build
+
+# 测试所有包
+pnpm run test
+```
+
+## 📈 开发进度
+
+### ✅ 已完成
+
+- **Phase 1**: 核心基础设施
+  - 项目配置和工具链
+  - 核心类型系统
+  - 依赖注入容器
+  - 事件总线系统
+  - Engine Context
+
+- **Phase 2**: Schema 系统
+  - 字段类型定义
+  - 字段验证
+  - 关系字段
+  - 类型推导
+
+- **Phase 3-5**: Engine 核心模块
+  - Model Layer (defineModel, BaseModel)
+  - Repository Layer (数据访问抽象)
+  - State Layer (MobX 状态管理)
+  - HTTP Client (拦截器、重试)
+  - Render System (多层渲染架构)
+
+- **Documentation**: Storybook 文档系统
+  - 145+ 交互式示例
+  - 完整架构文档
+  - MDX 格式文档
+
+### 🚧 进行中
+
+- **Phase 6**: Data Access Layer
+  - GraphQL 客户端
+  - WebSocket 支持
+  - 缓存策略
+
+### 📋 计划中
+
+- **Phase 7**: 框架集成
+  - React 适配器
+  - Vue 适配器
+
+- **Phase 8**: 工具和开发者体验
+  - CLI 工具
+  - 代码生成器
+  - VS Code 扩展
+
+详细路线图请查看: [Development Roadmap](/docs/project-developmentroadmap)
+
+## 🤝 贡献指南
+
+我们欢迎所有形式的贡献！
+
+### 贡献方式
+
+- 🐛 报告 Bug
+- 💡 提出新功能建议
+- 📝 改进文档
+- 🔨 提交代码
+
+### 开始贡献
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交改动 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
+
+详细指南请查看: [Contributing Guide](/docs/project-contributing)
+
+## 📂 重要文档
+
+### 项目规划
+
+- [实施计划](https://github.com/Xeonice/schema-component/blob/main/IMPLEMENTATION_PLAN.md) - 详细的 8 阶段开发计划
+- [Phase 1 完成报告](https://github.com/Xeonice/schema-component/blob/main/PHASE1_COMPLETE.md) - 基础设施里程碑
+- [文档整理计划](https://github.com/Xeonice/schema-component/blob/main/DOCS_CONSOLIDATION_PLAN.md) - 文档组织策略
+
+### 架构设计
+
+- [Engine 设计文档](https://github.com/Xeonice/schema-component/blob/main/ENGINE_DESIGN.md) - 完整的 Engine 架构设计
+- [渲染架构](/docs/engine-docs-renderarchitecture) - 多层渲染系统设计
+- [函数式设计原则](/docs/engine-architecture) - 核心设计理念
+
+## 🔗 相关链接
+
+- **GitHub**: https://github.com/Xeonice/schema-component
+- **Issues**: https://github.com/Xeonice/schema-component/issues
+- **Pull Requests**: https://github.com/Xeonice/schema-component/pulls
+
+## 📄 许可证
+
+MIT License - 详见 [LICENSE](https://github.com/Xeonice/schema-component/blob/main/LICENSE) 文件
+
+---
+
+**项目维护者**: @Xeonice
+
+**最后更新**: 2025-10-31

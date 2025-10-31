@@ -50,6 +50,39 @@ await engine.initialize()
 
 See [../../IMPLEMENTATION_PLAN.md](../../IMPLEMENTATION_PLAN.md) for details.
 
+## Documentation
+
+完整的交互式文档和 108 个代码示例请访问 Storybook：
+
+**本地查看**:
+```bash
+cd ../../
+pnpm storybook
+```
+
+### 📚 Storybook 文档
+
+- **[Overview](../../packages/storybook/stories/engine/Overview.mdx)** - Engine 总览
+- **[Getting Started](../../packages/storybook/stories/engine/GettingStarted.stories.tsx)** - 快速入门 (8个示例)
+- **[Architecture](../../packages/storybook/stories/engine/Architecture.mdx)** - 架构设计文档索引
+
+### 🎯 模块文档
+
+- **[Core](../../packages/storybook/stories/engine/core/)** - 核心模型系统 (8个示例)
+- **[DI](../../packages/storybook/stories/engine/di/)** - 依赖注入 (12个示例)
+- **[Event](../../packages/storybook/stories/engine/event/)** - 事件总线 (11个示例)
+- **[HTTP](../../packages/storybook/stories/engine/http/)** - HTTP 客户端 (18个示例)
+- **[State](../../packages/storybook/stories/engine/state/)** - 状态管理 (15个示例)
+- **[Repository](../../packages/storybook/stories/engine/repository/)** - 仓储模式 (12个示例)
+- **[Render](../../packages/storybook/stories/engine/render/)** - 渲染系统 (36个示例)
+
+### 🏗️ 架构文档
+
+- **[Render Architecture](../../packages/storybook/stories/engine/docs/RenderArchitecture.mdx)** - 渲染架构设计
+- **[Render Design](../../packages/storybook/stories/engine/docs/RenderDesign.mdx)** - 渲染详细设计
+- **[Render Layer Design](../../packages/storybook/stories/engine/docs/RenderLayerDesign.mdx)** - 渲染分层设计
+- **[Action Renderer Design](../../packages/storybook/stories/engine/docs/ActionRendererDesign.mdx)** - Action 渲染器设计
+
 ## Development
 
 ```bash
