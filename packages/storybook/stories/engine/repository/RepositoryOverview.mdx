@@ -1,0 +1,378 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Repository/Overview" />
+
+# Repository Module
+
+The Repository module provides an abstraction layer for data access operations, implementing the Repository pattern to decouple your business logic from data sources.
+
+## Overview
+
+The Repository pattern offers a collection-like interface for accessing domain objects, abstracting the underlying data access mechanism. This allows you to:
+
+- Switch between different data sources without changing business logic
+- Test your code easily with mock repositories
+- Maintain a consistent interface for all data operations
+- Support multiple backends (HTTP/REST, GraphQL, LocalStorage, etc.)
+
+## Benefits of Abstraction
+
+### 1. Decoupling
+Separate your business logic from data access implementation. Models and Actions don't need to know whether data comes from a REST API, GraphQL endpoint, or local mock store.
+
+### 2. Testability
+Use `MockRepository` for testing without making real HTTP requests. Your tests run faster and don't depend on external services.
+
+### 3. Flexibility
+Switch between different implementations easily:
+- Development: Use `MockRepository`
+- Production: Use `HttpRepository`
+- Testing: Use isolated mock stores
+
+### 4. Consistency
+All repositories implement the same `IRepository` interface, providing a consistent API regardless of the underlying data source.
+
+## Available Implementations
+
+### HttpRepository
+Connects to REST/HTTP APIs using the HttpClient. Ideal for production environments where you need to interact with backend services.
+
+**Features:**
+- Full CRUD operations
+- List with pagination, sorting, and filtering
+- Integration with HttpClient for interceptors and error handling
+- Support for batch operations (getMany, createMany, etc.)
+
+**Use cases:**
+- Production applications
+- Integration with REST APIs
+- Remote data fetching
+
+### MockRepository
+In-memory data store for development and testing. Provides the same interface as HttpRepository but stores data locally.
+
+**Features:**
+- In-memory data storage
+- Support for filtering, sorting, and pagination
+- Automatic ID generation
+- Isolated test environments
+- No network dependencies
+
+**Use cases:**
+- Unit testing
+- Development without backend
+- Offline development
+- Storybook stories
+
+## IRepository Interface
+
+All repositories implement the `IRepository` interface, which defines these methods:
+
+### Single Record Operations
+```typescript
+interface IRepository {
+  // Read operations
+  getOne(id: RecordId): Promise<any>
+
+  // Create operations
+  createOne(data: any): Promise<any>
+
+  // Update operations
+  updateOne(id: RecordId, data: any): Promise<any>
+
+  // Delete operations
+  deleteOne(id: RecordId): Promise<boolean>
+}
+```
+
+### Batch Operations
+```typescript
+interface IRepository {
+  // Read multiple records
+  getMany(ids: RecordId[]): Promise<any[]>
+
+  // Create multiple records
+  createMany(data: any[]): Promise<any[]>
+
+  // Update multiple records
+  updateMany(ids: RecordId[], data: any): Promise<any[]>
+
+  // Delete multiple records
+  deleteMany(ids: RecordId[]): Promise<boolean>
+}
+```
+
+### List Operations
+```typescript
+interface IRepository {
+  // Get list with pagination, sorting, filtering
+  getList(params: GetListParams): Promise<GetListResult>
+}
+
+interface GetListParams {
+  pagination?: {
+    page: number
+    pageSize: number
+  }
+  sort?: Array<{
+    field: string
+    order: 'ASC' | 'DESC'
+  }>
+  filter?: Record<string, any>
+}
+
+interface GetListResult<T = any> {
+  data: T[]
+  total: number
+  page?: number
+  pageSize?: number
+}
+```
+
+## Creating Repositories
+
+### Method 1: Automatic Creation via defineModel
+
+The simplest way is to configure the repository in your model definition:
+
+```typescript
+import { defineModel } from '@schema-component/engine'
+
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+
+  // Configure HTTP Repository
+  repository: {
+    type: 'http',
+    http: {
+      baseURL: 'https://api.example.com',
+      resourcePath: '/users'
+    }
+  }
+})
+
+// Repository is automatically created and available
+const users = await UserModel.context.repository.getList()
+```
+
+### Method 2: Manual Creation with createRepository
+
+For more control, create the repository manually:
+
+```typescript
+import { createRepository, createHttpClient } from '@schema-component/engine'
+
+// Create HTTP client
+const httpClient = createHttpClient({
+  baseURL: 'https://api.example.com',
+  timeout: 10000
+})
+
+// Create repository
+const repository = createRepository({
+  type: 'http',
+  modelName: 'User',
+  http: {
+    httpClient,
+    resourcePath: '/users'
+  }
+})
+
+// Use directly or pass to model
+const users = await repository.getList({
+  pagination: { page: 1, pageSize: 10 }
+})
+```
+
+### Method 3: Using Factory Methods
+
+Use specialized factory methods for specific repository types:
+
+```typescript
+import { RepositoryFactory, createHttpClient } from '@schema-component/engine'
+
+// Create mock repository
+const mockRepo = RepositoryFactory.createMock('User')
+
+// Create HTTP repository
+const httpClient = createHttpClient({ baseURL: 'https://api.example.com' })
+const httpRepo = RepositoryFactory.createHttp(httpClient, '/users')
+```
+
+## Custom Repository Implementation
+
+You can create custom repositories by implementing the `IRepository` interface:
+
+```typescript
+import { IRepository, GetListParams, GetListResult, RecordId } from '@schema-component/engine'
+
+class LocalStorageRepository implements IRepository {
+  constructor(private storageKey: string) {}
+
+  async getList(params: GetListParams): Promise<GetListResult> {
+    const data = JSON.parse(localStorage.getItem(this.storageKey) || '[]')
+    // Apply filtering, sorting, pagination...
+    return { data, total: data.length }
+  }
+
+  async getOne(id: RecordId): Promise<any> {
+    const data = JSON.parse(localStorage.getItem(this.storageKey) || '[]')
+    return data.find((item: any) => item.id === id)
+  }
+
+  async createOne(data: any): Promise<any> {
+    const items = JSON.parse(localStorage.getItem(this.storageKey) || '[]')
+    const newItem = { ...data, id: Date.now().toString() }
+    items.push(newItem)
+    localStorage.setItem(this.storageKey, JSON.stringify(items))
+    return newItem
+  }
+
+  // Implement other methods...
+}
+
+// Use custom repository
+const customRepo = new LocalStorageRepository('users')
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  repository: customRepo
+})
+```
+
+## Integration Examples
+
+### With Model Actions
+
+Actions can access the repository through the context:
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  repository: { type: 'http', /* ... */ },
+
+  actions: (context) => ({
+    activate: async ({ id }: { id: string }) => {
+      // Use repository to update data
+      return context.repository.updateOne(id, { active: true })
+    },
+
+    deactivate: async ({ id }: { id: string }) => {
+      return context.repository.updateOne(id, { active: false })
+    }
+  })
+})
+```
+
+### With Model APIs
+
+APIs can use the repository for data fetching:
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  repository: { type: 'http', /* ... */ },
+
+  apis: {
+    getActiveUsers: async () => {
+      const model = UserModel
+      return model.context.repository.getList({
+        filter: { active: true },
+        sort: [{ field: 'name', order: 'ASC' }]
+      })
+    }
+  }
+})
+```
+
+### With ModelStore
+
+When using ModelStore for state management, the repository automatically integrates:
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  repository: { type: 'http', /* ... */ },
+  store: true // Enable ModelStore
+})
+
+// Store uses repository internally
+await UserModel.context.store.loadList({ page: 1, pageSize: 10 })
+await UserModel.context.store.loadOne(userId)
+await UserModel.context.store.create({ name: 'New User' })
+```
+
+## Best Practices
+
+### 1. Use Mock for Development
+Start with MockRepository during development:
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  // No repository config = default to Mock
+})
+```
+
+### 2. Configure HTTP for Production
+Switch to HTTP repository when connecting to real APIs:
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  repository: {
+    type: process.env.NODE_ENV === 'production' ? 'http' : 'mock',
+    http: {
+      baseURL: process.env.API_BASE_URL,
+      resourcePath: '/users'
+    }
+  }
+})
+```
+
+### 3. Error Handling
+Always handle potential errors from repository operations:
+
+```typescript
+try {
+  const user = await repository.getOne(userId)
+  console.log('User loaded:', user)
+} catch (error) {
+  console.error('Failed to load user:', error)
+  // Handle error appropriately
+}
+```
+
+### 4. Use Pagination
+Always use pagination for list operations:
+
+```typescript
+const result = await repository.getList({
+  pagination: { page: 1, pageSize: 20 },
+  sort: [{ field: 'createdAt', order: 'DESC' }]
+})
+```
+
+### 5. Clean Mock Data in Tests
+Clear mock data between tests:
+
+```typescript
+import { clearAllMockData } from '@schema-component/engine'
+
+beforeEach(() => {
+  clearAllMockData()
+})
+```
+
+## Next Steps
+
+- Explore [HttpRepository Stories](?path=/story/engine-repository-httprepository--create-http-repository) for interactive examples
+- Learn about [HttpClient](?path=/story/engine-http-httpclient--create-http-client) for HTTP configuration
+- See [RestClient](?path=/story/engine-http-restclient--create-rest-client) for REST API patterns
+- Check [ModelStore](?path=/docs/engine-state-overview) for state management integration

@@ -1,0 +1,289 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Core/Overview" />
+
+# Core Module Overview
+
+The **Core** module is the heart of `@schema-component/engine`. It provides the `defineModel` function, which enables you to create type-safe, feature-rich model definitions that integrate seamlessly with schemas, repositories, state management, and event systems.
+
+## Introduction to defineModel
+
+`defineModel` is the primary API for creating models in the engine. A model represents a business entity (like User, Product, Order) and encapsulates:
+
+- **Schema**: Data structure and validation rules
+- **Views**: UI component configurations
+- **Actions**: Business logic operations with side effects
+- **APIs**: Data fetching and persistence functions
+- **Hooks**: Lifecycle callbacks (beforeCreate, afterUpdate, etc.)
+- **Methods**: Utility functions for the model
+
+### Basic Usage
+
+```typescript
+import { defineModel } from '@schema-component/engine'
+
+const UserModel = defineModel({
+  name: 'User',
+  schema: {
+    fields: {
+      id: { type: 'string', required: true },
+      name: { type: 'string', required: true },
+      email: { type: 'string', required: true }
+    }
+  }
+})
+```
+
+## Model Structure
+
+### 1. Schema Definition
+
+The `schema` defines your data structure, field types, validation rules, and defaults.
+
+```typescript
+schema: {
+  fields: {
+    id: { type: 'string', primary: true },
+    name: { type: 'string', required: true },
+    email: { type: 'string', required: true },
+    role: { type: 'string', default: 'user' },
+    isActive: { type: 'boolean', default: true }
+  }
+}
+```
+
+### 2. Views (UI Configurations)
+
+Views define how your model's data should be rendered in the UI. They can be defined as objects or functions that receive the model context.
+
+```typescript
+// As a function (recommended - provides access to context)
+views: (context) => ({
+  list: {
+    type: 'list',
+    title: `${context.modelName} List`,
+    columns: [
+      { field: 'name', label: 'Name', sortable: true },
+      { field: 'email', label: 'Email' }
+    ]
+  },
+  form: {
+    type: 'form',
+    title: 'Edit User',
+    fields: ['name', 'email', 'role']
+  }
+})
+
+// As an object (static configuration)
+views: {
+  list: { type: 'list', title: 'User List' },
+  detail: { type: 'detail', title: 'User Details' }
+}
+```
+
+### 3. Actions (Business Logic)
+
+Actions are executable functions that perform operations with side effects. They have access to the model context, including the repository and event bus.
+
+```typescript
+// As a function (recommended)
+actions: (context) => ({
+  activate: async ({ id }: { id: string }) => {
+    // Update via repository
+    const user = await context.repository.updateOne(id, { isActive: true })
+
+    // Publish event
+    context.eventBus.publish({
+      type: 'user:activated',
+      payload: { id, user },
+      timestamp: Date.now()
+    })
+
+    return user
+  }
+})
+```
+
+### 4. APIs (Data Operations)
+
+APIs define how to fetch and persist data. They typically interact with HTTP endpoints or repositories.
+
+```typescript
+apis: {
+  getList: async (params) => {
+    const response = await httpClient.get('/users', { params })
+    return response.data
+  },
+
+  getOne: async (id: string) => {
+    const response = await httpClient.get(`/users/${id}`)
+    return response.data
+  },
+
+  createOne: async (data: any) => {
+    const response = await httpClient.post('/users', data)
+    return response.data
+  }
+}
+```
+
+### 5. Hooks (Lifecycle Callbacks)
+
+Hooks allow you to intercept and modify data at key points in the model lifecycle.
+
+```typescript
+hooks: {
+  beforeCreate: async (data) => {
+    // Transform data before creation
+    return {
+      ...data,
+      createdAt: Date.now(),
+      isActive: true
+    }
+  },
+
+  afterCreate: async (record) => {
+    // Perform actions after creation
+    console.log('User created:', record.id)
+  },
+
+  beforeUpdate: async (id, data) => {
+    // Validate or transform before update
+    return data
+  },
+
+  afterUpdate: async (record) => {
+    // Sync with external systems, etc.
+    console.log('User updated:', record.id)
+  }
+}
+```
+
+### 6. Methods (Utility Functions)
+
+Methods are custom functions specific to your model that don't fit into actions or APIs.
+
+```typescript
+methods: {
+  resetPassword: async (id: string) => {
+    const token = generateResetToken()
+    await sendEmail(id, token)
+    return { token, sent: true }
+  },
+
+  validateEmail: (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+}
+```
+
+## Core Concepts
+
+### Model Context
+
+Every model has a context that provides access to:
+
+- `modelName`: The name of the model
+- `schema`: The schema definition
+- `repository`: Data access layer
+- `eventBus`: Event publishing/subscription
+- `store`: Reactive state management (optional)
+
+Functions in `views` and `actions` receive this context, enabling them to interact with the entire system.
+
+### Function-First Design
+
+Both `views` and `actions` can be defined as:
+
+1. **Functions** (recommended): Receive model context and return definitions
+2. **Objects**: Static definitions without access to context
+
+The function approach is more powerful as it allows dynamic configuration based on the model context.
+
+```typescript
+// Function approach - dynamic and context-aware
+actions: (context) => ({
+  notify: async ({ message }) => {
+    // Access repository, eventBus, etc.
+    context.eventBus.publish({
+      type: `${context.modelName}:notification`,
+      payload: { message }
+    })
+  }
+})
+
+// Object approach - static
+actions: {
+  notify: async ({ message }) => {
+    // Cannot access context here
+    console.log(message)
+  }
+}
+```
+
+### Integration with Other Modules
+
+Models integrate seamlessly with:
+
+- **Repository Layer**: Automatic CRUD operations
+- **Event System**: Publish/subscribe to model events
+- **State Management**: Optional MobX store integration
+- **HTTP Client**: API communication with interceptors
+
+### Type Safety
+
+`defineModel` provides full TypeScript support:
+
+```typescript
+interface User {
+  id: string
+  name: string
+  email: string
+}
+
+const UserModel = defineModel<User>({
+  name: 'User',
+  schema: { /* ... */ },
+  actions: (context) => ({
+    create: async (data: Omit<User, 'id'>): Promise<User> => {
+      return context.repository.createOne(data)
+    }
+  })
+})
+```
+
+## Next Steps
+
+Explore the interactive stories to see `defineModel` in action:
+
+- **Basic Model**: Simple model definition
+- **Model with Schema**: Adding field definitions
+- **Model with Actions**: Business logic operations
+- **Model with Views**: UI configurations
+- **Model with Hooks**: Lifecycle management
+- **Complete Example**: Full-featured model
+
+## API Reference
+
+### defineModel(definition)
+
+Creates a model instance.
+
+**Parameters:**
+- `definition.name` (required): Model name
+- `definition.schema` (required): Schema definition
+- `definition.views`: View configurations
+- `definition.actions`: Action definitions
+- `definition.apis`: API functions
+- `definition.hooks`: Lifecycle hooks
+- `definition.methods`: Utility methods
+- `definition.options`: Additional options
+
+**Returns:** `IModel` - Model instance with all properties resolved
+
+### Utility Functions
+
+- `registerModel(model)`: Register model with the engine
+- `getModel(name)`: Retrieve registered model by name
+- `executeAction(model, actionName, params)`: Execute a model action
+- `callApi(model, apiName, ...args)`: Call a model API

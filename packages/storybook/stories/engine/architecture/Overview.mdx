@@ -1,0 +1,283 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Architecture/Overview" />
+
+# Engine 架构总览
+
+## 概述
+
+`@schema-component/engine` 是一个基于 DDD（领域驱动设计）原则的**框架无关**的数据引擎层，提供模型管理、状态管理、视图定义、动作编排和渲染注册等核心能力。
+
+本设计参考了 Odoo 的模型管理模式，支持声明式定义和灵活扩展。
+
+## 核心特性
+
+###  🎯 框架无关
+不依赖任何前端框架（React、Vue 等），可在任何JavaScript环境中使用
+
+### 🏗️ DDD 架构
+清晰的分层架构，包括领域模型、仓储、服务等
+
+### 🔄 响应式状态
+基于 MobX 的观察者模式实现响应式数据流
+
+### 💉 依赖注入
+通过 InversifyJS IoC 容器管理依赖关系
+
+### 🔌 插件化
+支持通过插件扩展功能
+
+### 🔒 类型安全
+完整的 TypeScript 类型支持和类型推导
+
+## 设计原则
+
+### 1. 领域驱动设计（DDD）
+
+清晰的分层架构确保关注点分离：
+
+- **Model 层** - 领域模型和业务逻辑
+- **Repository 层** - 数据访问协调
+- **State 层** - 状态管理
+- **Data Access 层** - 数据源访问
+- **Render 层** - 渲染注册和管理
+
+### 2. 框架无关性
+
+Engine 核心不依赖任何 UI 框架：
+
+- ✅ 可与 React、Vue、Angular 等集成
+- ✅ 可在 Node.js 环境使用
+- ✅ 可在浏览器和服务端运行
+- ✅ 通过适配器模式集成不同框架
+
+### 3. 观察者模式
+
+使用成熟的响应式库：
+
+- **MobX** - 自动追踪依赖，最小化重渲染
+- **自动派生** - computed 值自动更新
+- **响应式更新** - 数据变化自动通知订阅者
+
+### 4. 依赖注入
+
+通过 IoC 容器管理依赖：
+
+- **松耦合** - 模块间通过接口通信
+- **可测试性** - 轻松mock依赖
+- **可扩展性** - 运行时注册新实现
+- **装饰器支持** - `@injectable`, `@inject` 等
+
+### 5. 插件化架构
+
+灵活的扩展机制：
+
+- **渲染器插件** - 注册自定义 DataRenderer/ViewRenderer
+- **数据访问插件** - 添加新的数据源支持
+- **中间件** - HTTP interceptors, event listeners
+- **Hook 系统** - 生命周期钩子扩展
+
+### 6. 类型安全
+
+完整的 TypeScript 支持：
+
+- **类型推导** - 从 Schema 自动推导类型
+- **泛型支持** - Repository<T>, ModelStore<T>
+- **严格检查** - 编译时捕获错误
+- **智能提示** - 优秀的 IDE 支持
+
+## 技术选型
+
+| 模块 | 技术选型 | 理由 |
+|------|---------|------|
+| 状态管理 | **MobX 6.13+** | 框架无关，成熟的观察者模式实现，API 简洁 |
+| 依赖注入 | **InversifyJS 6.0+** | 成熟的 IoC 容器，装饰器支持，TypeScript 友好 |
+| Schema 验证 | **@schema-component/schema** | 复用现有的 Schema 系统 |
+| 事件系统 | **EventEmitter3 5.0+** | 轻量级，性能好，API 简单 |
+| HTTP 客户端 | **Axios** (optional peer dep) | 成熟稳定，拦截器支持，广泛使用 |
+
+## 整体架构图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Application Layer                     │
+│                    (外部应用：React/Vue/等)                   │
+└─────────────────────────────────────────────────────────────┘
+                              ▲
+                              │
+┌─────────────────────────────┼─────────────────────────────────┐
+│                             │                                  │
+│                    @schema-component/engine                   │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              Render Registry (渲染管理器)             │   │
+│  │  • DataRender 注册/反注册                             │   │
+│  │  • ViewRender 注册/反注册                             │   │
+│  │  • Context 注入扩展                                   │   │
+│  └─────────────────────┬────────────────────────────────┘   │
+│                        │                                     │
+│  ┌─────────────────────▼──────────────────────────┐         │
+│  │         Model 层（统一定义层）                 │         │
+│  │  ┌───────────────────────────────────────┐    │         │
+│  │  │ defineModel({                         │    │         │
+│  │  │   schema: {...},    // Schema 定义    │    │         │
+│  │  │   views: {...},     // View 定义      │    │         │
+│  │  │   actions: {...},   // Action 定义    │    │         │
+│  │  │   apis: {...},      // API 配置       │    │         │
+│  │  │   hooks: {...},     // 生命周期钩子   │    │         │
+│  │  │   methods: {...}    // 自定义方法     │    │         │
+│  │  │ })                                     │    │         │
+│  │  └───────────────────────────────────────┘    │         │
+│  └──────────────┬──────────────────────┬──────────┘         │
+│                 │                      │                     │
+│  ┌──────────────▼───────┐   ┌─────────▼─────────┐          │
+│  │  Repository          │   │   State (MobX)    │          │
+│  │  (数据访问协调)      │   │   (状态管理)      │          │
+│  └──────────────┬───────┘   └───────────────────┘          │
+│                 │                                            │
+│  ┌──────────────▼────────┐  ┌────────────────────┐         │
+│  │  Event Bus            │  │  DI Container      │         │
+│  │  (事件总线)           │  │  (依赖注入)        │         │
+│  └───────────────────────┘  └─────────┬──────────┘         │
+│                                        │                     │
+└────────────────────────────────────────┼─────────────────────┘
+                                         │ (通过 DI 注入)
+                                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Data Access Layer (数据访问层 IoC)              │
+│                                                               │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  │
+│  │  HTTP Client   │  │  GraphQL (待)  │  │ WebSocket(待)│  │
+│  │   (✅ 已实现)  │  │   (未来支持)   │  │  (未来支持)  │  │
+│  └────────────────┘  └────────────────┘  └──────────────┘  │
+│                                                               │
+│           ▲ 统一接口：IDataAccessClient                      │
+└───────────┼───────────────────────────────────────────────────┘
+            ▼
+  ┌─────────────────────┐
+  │   External Data     │
+  │  (外部数据源)       │
+  └─────────────────────┘
+```
+
+## 核心概念
+
+### Model（模型）
+
+Model 是业务逻辑的核心载体，通过 `defineModel` 声明式定义：
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* 数据结构定义 */ },
+  actions: { /* 业务操作 */ },
+  apis: { /* API 调用 */ },
+  views: { /* 视图配置 */ },
+  hooks: { /* 生命周期 */ }
+})
+```
+
+### Repository（仓储）
+
+Repository 封装数据访问逻辑，提供统一的 CRUD 接口：
+
+```typescript
+const repository = createHttpRepository<User>({
+  baseURL: '/api/users'
+})
+
+await repository.getList({ page: 1 })
+await repository.createOne({ name: 'Alice' })
+```
+
+### State（状态）
+
+基于 MobX 的响应式状态管理：
+
+```typescript
+const userStore = createModelStore({
+  modelName: 'User',
+  repository
+})
+
+// 响应式数据
+observe(() => {
+  console.log(userStore.records) // 自动追踪
+})
+```
+
+### Events（事件）
+
+解耦的事件通信机制：
+
+```typescript
+eventBus.subscribe('user:created', (event) => {
+  console.log('New user:', event.payload)
+})
+
+eventBus.publish({
+  type: 'user:created',
+  payload: user
+})
+```
+
+## 分层职责
+
+### 📊 Model 层
+- 定义业务模型和规则
+- 声明 Schema、Views、Actions
+- 协调其他层的交互
+
+### 🗄️ Repository 层
+- 抽象数据访问
+- 提供统一的 CRUD 接口
+- 支持多种数据源
+
+### 💾 State 层
+- 管理应用状态
+- 响应式数据流
+- Computed 和 Reaction
+
+### 🌐 Data Access 层
+- HTTP/GraphQL/WebSocket 客户端
+- 请求/响应拦截
+- 错误处理和重试
+
+### 🎨 Render 层
+- 渲染器注册管理
+- 框架适配
+- UI 组件生成
+
+## 优势
+
+### 对比传统架构
+
+| 特性 | 传统 MVC/MVVM | Engine DDD |
+|------|--------------|------------|
+| 框架依赖 | 强耦合特定框架 | ✅ 完全解耦 |
+| 状态管理 | 框架内置方案 | ✅ 独立响应式层 |
+| 数据访问 | 分散在组件中 | ✅ Repository 统一 |
+| 类型安全 | 部分支持 | ✅ 完整类型系统 |
+| 可测试性 | 依赖框架测试工具 | ✅ 纯逻辑测试 |
+| 可扩展性 | 受限于框架 | ✅ 插件化设计 |
+
+## 下一步
+
+深入了解各个架构层：
+
+- [Function-First Design](/docs/engine-architecture-function-first-design) - 核心设计理念
+- [Layered Architecture](/docs/engine-architecture-layered-architecture) - 分层架构详解
+- [Design Principles](/docs/engine-architecture-design-principles) - 设计原则深入
+
+探索核心层实现：
+
+- [Model Layer](/docs/engine-core-layers-model-layer) - 模型层
+- [Repository Layer](/docs/engine-core-layers-repository-layer) - 仓储层
+- [State Layer](/docs/engine-core-layers-state-layer) - 状态层
+- [Data Access Layer](/docs/engine-core-layers-data-access-layer) - 数据访问层
+
+查看完整设计文档：[ENGINE_DESIGN.md](https://github.com/Xeonice/schema-component/blob/main/ENGINE_DESIGN.md)
+
+---
+
+**最后更新**: 2025-10-31

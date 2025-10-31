@@ -1,0 +1,432 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Render/Overview" />
+
+# Render Module Overview
+
+The **Render module** provides a flexible, multi-layer rendering architecture for the Schema Component Engine. It manages view rendering, action execution, and UI state through a unified system.
+
+## Architecture Overview
+
+The Render module is built on three core concepts:
+
+### 1. RenderEngine
+
+The central orchestrator that coordinates all rendering operations.
+
+- **Singleton pattern** - Single instance manages all renderers
+- **Renderer registration** - Register custom data, view, and action renderers
+- **Context management** - Create and manage rendering contexts
+- **Execution coordination** - Execute server and view actions
+
+```typescript
+import { RenderEngine } from '@schema-component/engine'
+
+// Get singleton instance
+const engine = RenderEngine.getInstance()
+
+// Register custom renderers
+engine.registerDataRenderer(customDataRenderer)
+engine.registerViewRenderer(customViewRenderer)
+engine.registerActionRenderer('button', buttonRenderer)
+
+// Render operations
+const descriptor = engine.renderView(viewDef, data, context)
+await engine.executeServerAction(action, params, context)
+```
+
+### 2. ViewStack
+
+Manages view navigation and hierarchy, similar to a browser history stack.
+
+- **Push/Replace views** - Navigate between views
+- **History management** - Track view history with back/forward navigation
+- **State preservation** - Each view maintains its own data and params
+- **Observable state** - MobX integration for reactive updates
+- **Lifecycle tracking** - Subscribe to view changes
+
+```typescript
+import { ViewStack } from '@schema-component/engine'
+
+const viewStack = new ViewStack()
+
+// Push a new view
+viewStack.push(viewDefinition, data, params)
+
+// Navigate
+viewStack.goBack()
+viewStack.goForward()
+viewStack.goTo(index)
+
+// Subscribe to changes
+viewStack.subscribe((current) => {
+  console.log('Current view:', current)
+})
+```
+
+### 3. ActionQueue
+
+Manages asynchronous action execution with priority scheduling and concurrency control.
+
+- **Priority queue** - Actions processed in order
+- **Concurrency control** - Limit parallel execution
+- **Retry logic** - Automatic retry on failure
+- **Timeout handling** - Prevent hanging operations
+- **Status tracking** - Monitor action lifecycle (pending, running, success, failed)
+- **Observable state** - MobX integration for reactive updates
+
+```typescript
+import { ActionQueue } from '@schema-component/engine'
+
+const actionQueue = new ActionQueue({
+  concurrency: 3,          // Max 3 concurrent actions
+  defaultMaxRetries: 2,    // Retry failed actions twice
+  timeout: 30000           // 30 second timeout
+})
+
+// Enqueue an action
+const taskId = actionQueue.enqueue(action, params, context)
+
+// Monitor status
+actionQueue.subscribe(taskId, (task) => {
+  console.log('Task status:', task.status)
+})
+
+// Manage tasks
+actionQueue.cancel(taskId)
+actionQueue.retry(taskId)
+```
+
+## Multi-Layer Rendering
+
+The architecture supports three conceptual rendering layers:
+
+### Static Layer
+Core data and structure rendering:
+- Data fields (text, number, date, etc.)
+- Basic layouts and containers
+- Schema-driven components
+
+### Dynamic Layer
+Interactive and state-dependent rendering:
+- Views (list, form, detail, kanban, etc.)
+- User interactions
+- Real-time updates
+
+### Effects Layer
+Side effects and async operations:
+- Server actions via ActionQueue
+- View actions (navigation, modals, etc.)
+- Event publishing and handling
+
+## Rendering Flow
+
+```typescript
+// 1. Create RenderEngine instance
+const engine = RenderEngine.getInstance({
+  viewStack: customViewStack,      // Optional
+  actionQueue: customActionQueue,  // Optional
+  actionQueueConfig: {             // Optional queue config
+    concurrency: 5,
+    timeout: 60000
+  }
+})
+
+// 2. Register renderers
+engine.registerDataRenderer(textRenderer)
+engine.registerViewRenderer(listRenderer)
+engine.registerActionRenderer('button', buttonRenderer)
+
+// 3. Create rendering context
+const context = engine.createContext({
+  modelName: 'User',
+  model: UserModel,
+  record: userData
+})
+
+// 4. Render data
+const dataDesc = engine.renderData(
+  value,
+  fieldDef,
+  context,
+  'view' // or 'edit'
+)
+
+// 5. Render views
+const viewDesc = engine.renderView(viewDef, data, context)
+
+// 6. Render actions
+const actionDesc = engine.renderAction(actionDef, context)
+
+// 7. Execute actions
+await engine.executeServerAction(serverAction, params, context)
+await engine.executeViewAction(viewAction, context)
+```
+
+## Key Features
+
+### Framework Agnostic
+The rendering system produces **RenderDescriptors** - plain objects that describe what to render, not how to render it:
+
+```typescript
+interface RenderDescriptor {
+  type: string                    // Component type
+  props: Record<string, any>      // Component props
+  children?: RenderDescriptor[]   // Child components
+  key?: string | number           // React key
+}
+```
+
+This allows you to:
+- Use any UI framework (React, Vue, Angular, etc.)
+- Implement custom rendering logic
+- Test rendering without a DOM
+
+### Type-Safe Rendering
+Full TypeScript support for all rendering operations:
+
+```typescript
+// Type-safe renderer interfaces
+interface IDataRenderer {
+  type: string
+  render(value: any, field: FieldDefinition, context: RenderContext): RenderDescriptor
+  renderEdit?(value: any, field: FieldDefinition, context: RenderContext): RenderDescriptor
+}
+
+interface IViewRenderer {
+  type: ViewType
+  render(view: ViewDefinition, data: any, context: RenderContext): RenderDescriptor
+}
+
+interface IActionRenderer {
+  renderMode: 'button' | 'menu' | 'dropdown' | 'toolbar'
+  renderServer?(action: ServerActionDefinition, context: RenderContext): RenderDescriptor
+  renderView?(action: ViewActionDefinition, context: RenderContext): RenderDescriptor
+}
+```
+
+### Observable State
+Integration with MobX for reactive rendering:
+
+```typescript
+// ViewStack and ActionQueue are observable
+import { observer } from 'mobx-react-lite'
+
+const ViewNavigator = observer(() => {
+  const { viewStack } = useRenderEngine()
+
+  return (
+    <div>
+      <h3>Current View: {viewStack.current?.type}</h3>
+      <button
+        disabled={!viewStack.canGoBack}
+        onClick={() => viewStack.goBack()}
+      >
+        Back
+      </button>
+      <button
+        disabled={!viewStack.canGoForward}
+        onClick={() => viewStack.goForward()}
+      >
+        Forward
+      </button>
+    </div>
+  )
+})
+```
+
+### Lifecycle Management
+
+#### ViewStack Lifecycle
+```typescript
+viewStack.subscribe((current) => {
+  // Called whenever the current view changes
+  if (current) {
+    console.log('View changed:', current.type)
+    console.log('View data:', current.data)
+    console.log('View params:', current.params)
+  }
+})
+```
+
+#### ActionQueue Lifecycle
+```typescript
+// Subscribe to specific task
+actionQueue.subscribe(taskId, (task) => {
+  switch (task.status) {
+    case 'pending':
+      console.log('Task queued')
+      break
+    case 'running':
+      console.log('Task started')
+      break
+    case 'success':
+      console.log('Task completed:', task.result)
+      break
+    case 'failed':
+      console.error('Task failed:', task.error)
+      break
+  }
+})
+
+// Subscribe to entire queue
+actionQueue.subscribeQueue((queue) => {
+  console.log('Pending:', queue.pending.length)
+  console.log('Running:', queue.running.length)
+  console.log('Completed:', queue.completed.length)
+})
+```
+
+## Use Cases
+
+### 1. Form Rendering
+```typescript
+const formView = {
+  type: 'form',
+  title: 'Edit User',
+  fields: ['name', 'email', 'role']
+}
+
+const context = engine.createContext({
+  modelName: 'User',
+  model: UserModel,
+  record: userData
+})
+
+const descriptor = engine.renderView(formView, userData, context)
+```
+
+### 2. Action Execution
+```typescript
+const saveAction: ServerActionDefinition = {
+  type: 'server',
+  name: 'save',
+  label: 'Save',
+  buttonType: 'primary',
+  getParams: (ctx) => ({ id: ctx.record.id }),
+  onSuccess: (result, ctx) => {
+    ctx.message?.success('Saved successfully')
+    ctx.viewStack.goBack()
+  }
+}
+
+await engine.executeServerAction(saveAction, params, context)
+```
+
+### 3. View Navigation
+```typescript
+// Push detail view
+viewStack.push(detailView, user, { mode: 'view' })
+
+// Push edit form
+viewStack.push(formView, user, { mode: 'edit' })
+
+// Replace current view
+viewStack.replace(successView, result)
+
+// Navigate back
+viewStack.goBack()
+```
+
+### 4. Batch Action Processing
+```typescript
+const queue = new ActionQueue({ concurrency: 5 })
+
+// Enqueue multiple actions
+const taskIds = users.map(user =>
+  queue.enqueue(deleteAction, { id: user.id }, context)
+)
+
+// Monitor progress
+queue.subscribeQueue((q) => {
+  const progress = (q.completed.length / taskIds.length) * 100
+  console.log(`Progress: ${progress}%`)
+})
+```
+
+## Best Practices
+
+### 1. Use Singleton Pattern for RenderEngine
+```typescript
+// Good: Use singleton
+const engine = RenderEngine.getInstance()
+
+// Bad: Create multiple instances
+const engine1 = new RenderEngine() // Error: constructor is private
+```
+
+### 2. Register Renderers Once
+```typescript
+// Register all renderers during app initialization
+function initializeRenderers() {
+  const engine = RenderEngine.getInstance()
+
+  // Data renderers
+  engine.registerDataRenderer(textRenderer)
+  engine.registerDataRenderer(numberRenderer)
+  engine.registerDataRenderer(dateRenderer)
+
+  // View renderers
+  engine.registerViewRenderer(listRenderer)
+  engine.registerViewRenderer(formRenderer)
+
+  // Action renderers
+  engine.registerActionRenderer('button', buttonRenderer)
+  engine.registerActionRenderer('menu', menuRenderer)
+}
+```
+
+### 3. Clean Up Subscriptions
+```typescript
+// Subscribe with cleanup
+useEffect(() => {
+  const unsubscribe = viewStack.subscribe((current) => {
+    console.log('View:', current)
+  })
+
+  return unsubscribe // Clean up on unmount
+}, [])
+```
+
+### 4. Handle Action Errors
+```typescript
+const action: ServerActionDefinition = {
+  type: 'server',
+  name: 'delete',
+  label: 'Delete',
+  confirm: {
+    title: 'Confirm Delete',
+    description: 'This action cannot be undone'
+  },
+  onSuccess: (result, ctx) => {
+    ctx.message?.success('Deleted successfully')
+  },
+  onError: (error, ctx) => {
+    ctx.message?.error(`Failed: ${error.message}`)
+  }
+}
+```
+
+### 5. Use Type Guards
+```typescript
+function isServerAction(action: ActionDefinition): action is ServerActionDefinition {
+  return action.type === 'server'
+}
+
+function isViewAction(action: ActionDefinition): action is ViewActionDefinition {
+  return action.type === 'view'
+}
+
+// Use in code
+if (isServerAction(action)) {
+  await engine.executeServerAction(action, params, context)
+} else {
+  await engine.executeViewAction(action, context)
+}
+```
+
+## Next Steps
+
+- Explore [RenderEngine Stories](/?path=/story/engine-render-renderengine--basic-setup) for detailed examples
+- See [ActionQueue Stories](/?path=/story/engine-render-actionqueue--basic-queue) for queue management
+- Check [ViewStack Stories](/?path=/story/engine-render-viewstack--basic-navigation) for navigation patterns

@@ -1,0 +1,339 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Project/Development Roadmap" />
+
+# 开发路线图
+
+@schema-component/engine 的实施计划分为 8 个阶段，渐进式构建完整的数据引擎层。
+
+## 进度概览
+
+| 阶段 | 状态 | 完成时间 |
+|------|------|---------|
+| Phase 1: 核心基础设施 | ✅ 完成 | 2025-10-30 |
+| Phase 2: Model 层 | ✅ 完成 | 2025-10-30 |
+| Phase 3: HTTP Client | ✅ 完成 | 2025-10-31 |
+| Phase 4: Repository 层 | ✅ 完成 | 2025-10-31 |
+| Phase 5: Render 系统 | ✅ 完成 | 2025-10-31 |
+| Phase 6: Data Access 扩展 | 🚧 进行中 | 预计 2025-11 |
+| Phase 7: 框架集成 | 📋 计划中 | 预计 2025-12 |
+| Phase 8: 工具和 DX | 📋 计划中 | 预计 2026-Q1 |
+
+---
+
+## Phase 1: 核心基础设施搭建 ✅
+
+**完成时间**: 2025-10-30
+**状态**: 已完成
+
+### 目标
+
+建立项目基础架构、类型系统和依赖注入容器。
+
+### 主要交付
+
+- ✅ 项目配置（package.json, tsconfig, vite config）
+- ✅ 核心类型定义（types.ts, viewTypes.ts, actionTypes.ts）
+- ✅ DI 容器实现（基于 InversifyJS）
+- ✅ Engine Context（引擎上下文管理）
+- ✅ Event Bus（事件总线系统）
+- ✅ 单元测试（39 个测试用例，100% 通过）
+
+### 技术栈确立
+
+- TypeScript 5.6+
+- MobX 6.13+ (状态管理)
+- InversifyJS 6.0+ (依赖注入)
+- EventEmitter3 5.0+ (事件系统)
+- Vitest (测试框架)
+
+---
+
+## Phase 2: Model 层 ✅
+
+**完成时间**: 2025-10-30
+**状态**: 已完成
+
+### 目标
+
+实现 Model 定义和注册系统。
+
+### 主要交付
+
+- ✅ `defineModel` API（声明式模型定义）
+- ✅ BaseModel 基类
+- ✅ ModelRegistry（模型注册管理）
+- ✅ ModelExecutor（模型执行器）
+- ✅ Schema 集成（与 @schema-component/schema 整合）
+- ✅ Views/Actions/APIs/Hooks 定义
+- ✅ 单元测试和集成测试
+
+### 核心功能
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+  schema: { /* ... */ },
+  views: (context) => ({ /* ... */ }),
+  actions: (context) => ({ /* ... */ }),
+  apis: { /* ... */ },
+  hooks: { /* ... */ }
+})
+```
+
+---
+
+## Phase 3: HTTP Client ✅
+
+**完成时间**: 2025-10-31
+**状态**: 已完成
+
+### 目标
+
+实现功能完整的 HTTP 客户端。
+
+### 主要交付
+
+- ✅ HttpClient 基础实现
+- ✅ 请求/响应拦截器
+- ✅ 自动重试机制
+- ✅ 超时控制
+- ✅ RestClient 包装器（CRUD 操作）
+- ✅ 错误处理和日志
+- ✅ 单元测试
+
+### 特性
+
+- 拦截器链
+- 自动重试（exponential backoff）
+- 请求取消
+- 进度追踪
+- 类型安全
+
+---
+
+## Phase 4: Repository 层 ✅
+
+**完成时间**: 2025-10-31
+**状态**: 已完成
+
+### 目标
+
+实现数据访问抽象层。
+
+### 主要交付
+
+- ✅ IRepository 接口定义
+- ✅ HttpRepository 实现
+- ✅ MockRepository（用于测试）
+- ✅ RepositoryFactory
+- ✅ 与 Model 层集成
+- ✅ 缓存策略（基础）
+- ✅ 单元测试和集成测试
+
+### 功能
+
+```typescript
+const repository = createHttpRepository<User>({
+  baseURL: '/api/users'
+})
+
+await repository.getList({ page: 1 })
+await repository.createOne({ name: 'Alice' })
+```
+
+---
+
+## Phase 5: Render 系统 ✅
+
+**完成时间**: 2025-10-31
+**状态**: 已完成
+
+### 目标
+
+实现框架无关的渲染系统。
+
+### 主要交付
+
+- ✅ RenderEngine 核心
+- ✅ DataRenderer 接口
+- ✅ ViewRenderer 接口
+- ✅ ActionRenderer 接口
+- ✅ ViewStack（视图栈管理）
+- ✅ ActionQueue（动作队列）
+- ✅ 多层渲染架构（Static/Dynamic/Effects）
+- ✅ 单元测试
+
+### 架构
+
+- Framework-agnostic RenderDescriptor
+- 三层渲染：Data/View/Action
+- MobX 集成
+- 优先级调度
+
+---
+
+## Phase 6: Data Access 扩展 🚧
+
+**状态**: 进行中
+**预计**: 2025-11
+
+### 目标
+
+扩展数据访问层，支持更多协议。
+
+### 计划交付
+
+- 🚧 GraphQL 客户端
+  - Query/Mutation/Subscription
+  - 缓存策略
+  - Apollo Client 集成（可选）
+
+- 🚧 WebSocket 支持
+  - 实时数据推送
+  - 断线重连
+  - 心跳检测
+
+- 📋 缓存管理
+  - LRU 缓存
+  - 持久化存储
+  - 缓存失效策略
+
+- 📋 离线支持
+  - 本地存储
+  - 同步队列
+  - 冲突解决
+
+---
+
+## Phase 7: 框架集成 📋
+
+**状态**: 计划中
+**预计**: 2025-12
+
+### 目标
+
+提供主流框架的适配器和组件。
+
+### 计划交付
+
+- 📋 React 适配器
+  - Hooks API
+  - HOC 组件
+  - 自动订阅/取消订阅
+
+- 📋 Vue 适配器
+  - Composition API
+  - Reactivity 集成
+  - Vue 3 支持
+
+- 📋 通用渲染器实现
+  - DataRenderer 实现集合
+  - ViewRenderer 实现集合
+  - ActionRenderer 实现集合
+
+- 📋 示例应用
+  - React 示例
+  - Vue 示例
+  - 最佳实践
+
+---
+
+## Phase 8: 工具和开发者体验 📋
+
+**状态**: 计划中
+**预计**: 2026-Q1
+
+### 目标
+
+提升开发者体验和生产力工具。
+
+### 计划交付
+
+- 📋 CLI 工具
+  - `create-schema-app` 脚手架
+  - 代码生成器
+  - 模板系统
+
+- 📋 VS Code 扩展
+  - Schema 语法高亮
+  - 自动补全
+  - 代码片段
+  - 类型检查
+
+- 📋 开发者工具
+  - Chrome DevTools 扩展
+  - 状态查看器
+  - 性能分析
+
+- 📋 文档和教程
+  - 完整的 API 文档
+  - 视频教程
+  - 最佳实践指南
+
+---
+
+## 里程碑
+
+### 已完成 ✅
+
+- **2025-10-30**: Phase 1 & 2 完成 - 核心基础设施和 Model 层
+- **2025-10-31**: Phase 3-5 完成 - HTTP/Repository/Render 系统
+
+### 进行中 🚧
+
+- **2025-11**: Phase 6 - Data Access 扩展
+
+### 未来计划 📋
+
+- **2025-12**: Phase 7 - 框架集成
+- **2026-Q1**: Phase 8 - 工具和 DX
+
+---
+
+## 当前重点
+
+### 正在开发
+
+1. GraphQL 客户端实现
+2. WebSocket 实时推送
+3. 高级缓存策略
+
+### 下一步计划
+
+1. React 适配器开发
+2. Vue 3 适配器开发
+3. 示例应用构建
+
+---
+
+## 参与贡献
+
+我们欢迎社区贡献！
+
+**感兴趣的领域**:
+- GraphQL/WebSocket 实现
+- React/Vue 适配器
+- 文档和示例
+- Bug 修复和测试
+
+查看 [Contributing Guide](/docs/project-contributing) 了解如何参与。
+
+---
+
+## 详细计划
+
+完整的实施计划和技术细节请查看:
+
+📄 [IMPLEMENTATION_PLAN.md](https://github.com/Xeonice/schema-component/blob/main/IMPLEMENTATION_PLAN.md)
+
+这个文档包含：
+- 每个阶段的详细任务列表
+- 完整的代码示例
+- 文件结构和命名规范
+- 测试策略
+- 时间估算
+
+---
+
+**最后更新**: 2025-10-31

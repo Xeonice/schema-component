@@ -1,0 +1,772 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Core Layers/State Layer" />
+
+# State 层（响应式状态管理）
+
+State 层基于 MobX 实现响应式状态管理，提供观察者模式的数据流，自动追踪依赖并最小化重渲染。
+
+## 核心概念
+
+State 层采用成熟的响应式库 MobX，具有以下特点：
+
+- **自动依赖追踪** - 无需手动订阅，MobX 自动追踪数据依赖
+- **最小化更新** - 只更新真正依赖的组件
+- **简洁的 API** - `observable`, `computed`, `action` 等直观易用
+- **框架无关** - 可与任何前端框架集成
+
+## 技术选型
+
+使用 MobX 作为状态管理库的原因：
+
+| 特性 | MobX | Redux | Zustand |
+|------|------|-------|---------|
+| **框架无关** | ✅ 是 | ✅ 是 | ✅ 是 |
+| **响应式** | ✅ 自动 | ❌ 手动 | ❌ 手动 |
+| **API 简洁度** | ✅ 简单 | ❌ 繁琐 | ✅ 简单 |
+| **TypeScript** | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| **性能** | ✅ 优秀 | ✅ 良好 | ✅ 良好 |
+| **学习曲线** | ✅ 平缓 | ❌ 陡峭 | ✅ 平缓 |
+
+## Model Store
+
+ModelStore 管理单个模型的状态：
+
+```typescript
+import { makeObservable, observable, action, computed } from 'mobx'
+
+class ModelStore {
+  // 数据存储
+  @observable
+  records: Map<string | number, any> = new Map()
+
+  @observable
+  loading: boolean = false
+
+  @observable
+  error: Error | null = null
+
+  constructor(private model: IModel) {
+    makeObservable(this)
+  }
+
+  // 加载数据
+  @action
+  async load(params: GetListParams) {
+    this.loading = true
+    this.error = null
+
+    try {
+      const result = await this.model.search(params)
+      result.forEach(record => {
+        this.records.set(record.id, record)
+      })
+    } catch (error) {
+      this.error = error as Error
+    } finally {
+      this.loading = false
+    }
+  }
+
+  // 获取单个记录
+  @computed
+  get(id: string | number) {
+    return this.records.get(id)
+  }
+
+  // 获取所有记录
+  @computed
+  get all() {
+    return Array.from(this.records.values())
+  }
+
+  // 创建记录
+  @action
+  async create(data: any) {
+    const record = await this.model.create(data)
+    this.records.set(record.id, record)
+    return record
+  }
+
+  // 更新记录
+  @action
+  async update(id: string | number, data: any) {
+    const record = await this.model.update(id, data)
+    this.records.set(id, record)
+    return record
+  }
+
+  // 删除记录
+  @action
+  async delete(id: string | number) {
+    await this.model.delete(id)
+    this.records.delete(id)
+  }
+
+  // 清空数据
+  @action
+  clear() {
+    this.records.clear()
+    this.error = null
+  }
+}
+```
+
+## View Store
+
+ViewStore 管理视图相关的状态：
+
+```typescript
+import { makeObservable, observable, action, computed } from 'mobx'
+
+class ViewStore {
+  @observable
+  currentView: IViewDefinition | null = null
+
+  @observable
+  selectedRecords: Set<string | number> = new Set()
+
+  @observable
+  filters: Record<string, any> = {}
+
+  @observable
+  sort: { field: string; order: 'ASC' | 'DESC' } | null = null
+
+  @observable
+  pagination: { page: number; pageSize: number } = {
+    page: 1,
+    pageSize: 10
+  }
+
+  constructor() {
+    makeObservable(this)
+  }
+
+  // 设置当前视图
+  @action
+  setView(view: IViewDefinition) {
+    this.currentView = view
+  }
+
+  // 选择记录
+  @action
+  selectRecord(id: string | number) {
+    this.selectedRecords.add(id)
+  }
+
+  // 取消选择记录
+  @action
+  deselectRecord(id: string | number) {
+    this.selectedRecords.delete(id)
+  }
+
+  // 切换选择
+  @action
+  toggleSelect(id: string | number) {
+    if (this.selectedRecords.has(id)) {
+      this.selectedRecords.delete(id)
+    } else {
+      this.selectedRecords.add(id)
+    }
+  }
+
+  // 全选/取消全选
+  @action
+  toggleSelectAll(ids: Array<string | number>) {
+    if (this.isAllSelected(ids)) {
+      ids.forEach(id => this.selectedRecords.delete(id))
+    } else {
+      ids.forEach(id => this.selectedRecords.add(id))
+    }
+  }
+
+  // 清空选择
+  @action
+  clearSelection() {
+    this.selectedRecords.clear()
+  }
+
+  // 设置过滤器
+  @action
+  setFilter(field: string, value: any) {
+    if (value === null || value === undefined) {
+      delete this.filters[field]
+    } else {
+      this.filters[field] = value
+    }
+  }
+
+  // 清空过滤器
+  @action
+  clearFilters() {
+    this.filters = {}
+  }
+
+  // 设置排序
+  @action
+  setSort(field: string, order: 'ASC' | 'DESC') {
+    this.sort = { field, order }
+  }
+
+  // 清空排序
+  @action
+  clearSort() {
+    this.sort = null
+  }
+
+  // 设置分页
+  @action
+  setPagination(page: number, pageSize: number) {
+    this.pagination = { page, pageSize }
+  }
+
+  // Computed - 是否全选
+  @computed
+  isAllSelected(ids: Array<string | number>): boolean {
+    return ids.every(id => this.selectedRecords.has(id))
+  }
+
+  // Computed - 已选择的数量
+  @computed
+  get selectedCount(): number {
+    return this.selectedRecords.size
+  }
+
+  // Computed - 已选择的ID列表
+  @computed
+  get selectedIds(): Array<string | number> {
+    return Array.from(this.selectedRecords)
+  }
+}
+```
+
+## Root Store
+
+RootStore 是全局 Store，管理所有 ModelStore 和 ViewStore：
+
+```typescript
+import { makeObservable, observable, action } from 'mobx'
+
+class RootStore {
+  @observable
+  modelStores: Map<string, ModelStore> = new Map()
+
+  @observable
+  viewStore: ViewStore = new ViewStore()
+
+  constructor() {
+    makeObservable(this)
+  }
+
+  // 获取 Model Store
+  @action
+  getModelStore(modelName: string): ModelStore {
+    if (!this.modelStores.has(modelName)) {
+      // 创建新的 ModelStore
+      const model = ModelRegistry.get(modelName)
+      const modelStore = new ModelStore(model)
+      this.modelStores.set(modelName, modelStore)
+    }
+    return this.modelStores.get(modelName)!
+  }
+
+  // 清空所有 Store
+  @action
+  clear() {
+    this.modelStores.forEach(store => store.clear())
+    this.viewStore.clearSelection()
+    this.viewStore.clearFilters()
+  }
+}
+```
+
+## 使用示例
+
+### 基础使用
+
+```typescript
+import { autorun, reaction } from 'mobx'
+
+// 创建 Store
+const rootStore = new RootStore()
+const userStore = rootStore.getModelStore('User')
+
+// 加载数据
+await userStore.load({
+  pagination: { page: 1, pageSize: 10 }
+})
+
+// 自动追踪依赖
+autorun(() => {
+  console.log('Users:', userStore.all)
+  console.log('Loading:', userStore.loading)
+})
+
+// 创建用户（自动触发 autorun）
+await userStore.create({
+  email: 'test@example.com',
+  name: 'Test User'
+})
+
+// 更新用户（自动触发 autorun）
+await userStore.update('user-id-123', {
+  name: 'Updated Name'
+})
+```
+
+### Computed Values
+
+```typescript
+class UserStore extends ModelStore {
+  // 计算活跃用户
+  @computed
+  get activeUsers() {
+    return this.all.filter(user => user.isActive)
+  }
+
+  // 计算管理员
+  @computed
+  get admins() {
+    return this.all.filter(user => user.role === 'admin')
+  }
+
+  // 计算用户总数
+  @computed
+  get totalCount() {
+    return this.records.size
+  }
+
+  // 计算活跃用户占比
+  @computed
+  get activeUserPercentage() {
+    if (this.totalCount === 0) return 0
+    return (this.activeUsers.length / this.totalCount) * 100
+  }
+}
+
+// 使用
+autorun(() => {
+  console.log('Active users:', userStore.activeUsers.length)
+  console.log('Active percentage:', userStore.activeUserPercentage + '%')
+})
+```
+
+### Reactions
+
+Reaction 允许你在特定数据变化时执行副作用：
+
+```typescript
+import { reaction } from 'mobx'
+
+// 监听用户数量变化
+reaction(
+  () => userStore.totalCount,
+  (count, previousCount) => {
+    console.log(`User count changed from ${previousCount} to ${count}`)
+
+    // 发送分析事件
+    analytics.track('user_count_changed', { count })
+  }
+)
+
+// 监听选择变化
+reaction(
+  () => viewStore.selectedCount,
+  (count) => {
+    if (count > 0) {
+      console.log(`${count} records selected`)
+    }
+  }
+)
+
+// 监听错误
+reaction(
+  () => userStore.error,
+  (error) => {
+    if (error) {
+      // 显示错误提示
+      showErrorToast(error.message)
+    }
+  }
+)
+```
+
+### 与 React 集成
+
+```typescript
+import { observer } from 'mobx-react-lite'
+
+// 使用 observer 包装组件
+const UserList = observer(() => {
+  const userStore = useUserStore()
+
+  // 自动追踪依赖，users 变化时自动重渲染
+  const users = userStore.all
+
+  return (
+    <div>
+      {userStore.loading && <Spinner />}
+      {userStore.error && <ErrorMessage error={userStore.error} />}
+
+      <ul>
+        {users.map(user => (
+          <li key={user.id}>
+            {user.name} - {user.email}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+})
+
+// 使用 computed
+const ActiveUserCount = observer(() => {
+  const userStore = useUserStore()
+
+  // 自动追踪 computed 值
+  return (
+    <div>
+      Active Users: {userStore.activeUsers.length} / {userStore.totalCount}
+      ({userStore.activeUserPercentage.toFixed(1)}%)
+    </div>
+  )
+})
+```
+
+### 与 Vue 集成
+
+```vue
+<template>
+  <div>
+    <div v-if="userStore.loading">Loading...</div>
+    <div v-if="userStore.error">{{ userStore.error.message }}</div>
+
+    <ul>
+      <li v-for="user in userStore.all" :key="user.id">
+        {{ user.name }} - {{ user.email }}
+      </li>
+    </ul>
+
+    <div>
+      Active Users: {{ userStore.activeUsers.length }} / {{ userStore.totalCount }}
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { observer } from 'mobx-vue-lite'
+import { useUserStore } from './stores'
+
+const userStore = useUserStore()
+
+// MobX 自动追踪响应式数据
+</script>
+```
+
+## 异步 Actions
+
+处理异步操作的最佳实践：
+
+```typescript
+class UserStore extends ModelStore {
+  @observable
+  loading: boolean = false
+
+  @observable
+  error: Error | null = null
+
+  // 使用 flow (推荐方式)
+  loadUsers = flow(function* (this: UserStore, params: GetListParams) {
+    this.loading = true
+    this.error = null
+
+    try {
+      const result = yield this.model.search(params)
+      result.forEach((record: any) => {
+        this.records.set(record.id, record)
+      })
+    } catch (error) {
+      this.error = error as Error
+    } finally {
+      this.loading = false
+    }
+  })
+
+  // 或使用 runInAction
+  @action
+  async loadUsersWithRunInAction(params: GetListParams) {
+    this.loading = true
+    this.error = null
+
+    try {
+      const result = await this.model.search(params)
+
+      // 使用 runInAction 包装状态更新
+      runInAction(() => {
+        result.forEach((record: any) => {
+          this.records.set(record.id, record)
+        })
+        this.loading = false
+      })
+    } catch (error) {
+      runInAction(() => {
+        this.error = error as Error
+        this.loading = false
+      })
+    }
+  }
+}
+```
+
+## 持久化
+
+将 Store 数据持久化到 localStorage：
+
+```typescript
+import { autorun } from 'mobx'
+
+class PersistentStore {
+  constructor(private store: ModelStore, private key: string) {
+    // 从 localStorage 加载
+    this.load()
+
+    // 自动保存
+    autorun(() => {
+      this.save()
+    })
+  }
+
+  private save() {
+    const data = {
+      records: Array.from(this.store.records.entries())
+    }
+    localStorage.setItem(this.key, JSON.stringify(data))
+  }
+
+  private load() {
+    const data = localStorage.getItem(this.key)
+    if (data) {
+      const parsed = JSON.parse(data)
+      parsed.records.forEach(([id, record]: [any, any]) => {
+        this.store.records.set(id, record)
+      })
+    }
+  }
+
+  clear() {
+    localStorage.removeItem(this.key)
+  }
+}
+
+// 使用
+const persistentUserStore = new PersistentStore(userStore, 'user-store')
+```
+
+## 调试工具
+
+MobX 提供了强大的调试工具：
+
+```typescript
+import { trace, spy } from 'mobx'
+
+// 在 computed 中使用 trace
+@computed
+get activeUsers() {
+  trace() // 打印依赖追踪信息
+  return this.all.filter(user => user.isActive)
+}
+
+// 全局监听所有变化
+spy(event => {
+  if (event.type === 'action') {
+    console.log(`Action ${event.name} called with:`, event.arguments)
+  }
+  if (event.type === 'reaction') {
+    console.log(`Reaction ${event.name} triggered`)
+  }
+})
+
+// 使用 MobX DevTools (浏览器扩展)
+import { configure } from 'mobx'
+
+configure({
+  enforceActions: 'always', // 强制使用 action
+  computedRequiresReaction: true, // computed 需要有观察者
+  reactionRequiresObservable: true, // reaction 需要观察 observable
+  observableRequiresReaction: true // observable 需要有观察者
+})
+```
+
+## 性能优化
+
+### 1. 使用 computed 缓存计算结果
+
+```typescript
+class UserStore {
+  @observable records: Map<string, User> = new Map()
+
+  // ✅ 使用 computed 缓存
+  @computed
+  get sortedUsers() {
+    return Array.from(this.records.values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  // ❌ 避免在 getter 中直接计算
+  get sortedUsersBad() {
+    // 每次访问都会重新计算
+    return Array.from(this.records.values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+}
+```
+
+### 2. 批量更新
+
+```typescript
+import { runInAction } from 'mobx'
+
+// ✅ 批量更新（触发一次更新）
+@action
+batchUpdate(updates: Array<{ id: string; data: any }>) {
+  updates.forEach(({ id, data }) => {
+    const record = this.records.get(id)
+    if (record) {
+      Object.assign(record, data)
+    }
+  })
+}
+
+// ❌ 避免单独更新（触发多次更新）
+async batchUpdateBad(updates: Array<{ id: string; data: any }>) {
+  for (const { id, data } of updates) {
+    await this.update(id, data) // 每次都触发更新
+  }
+}
+```
+
+### 3. 使用 shallow comparison
+
+```typescript
+import { observable } from 'mobx'
+
+class UserStore {
+  // 使用 shallow 减少深度追踪
+  @observable.shallow
+  records: Map<string, User> = new Map()
+
+  // 对于不需要深度追踪的大数组
+  @observable.shallow
+  largeList: any[] = []
+}
+```
+
+## 最佳实践
+
+### 1. Store 组织
+
+```typescript
+// stores/index.ts
+export class Stores {
+  rootStore: RootStore
+  userStore: ModelStore
+  postStore: ModelStore
+  viewStore: ViewStore
+
+  constructor() {
+    this.rootStore = new RootStore()
+    this.userStore = this.rootStore.getModelStore('User')
+    this.postStore = this.rootStore.getModelStore('Post')
+    this.viewStore = this.rootStore.viewStore
+  }
+}
+
+// 创建单例
+export const stores = new Stores()
+
+// React Hook
+export const useStores = () => stores
+export const useUserStore = () => stores.userStore
+export const usePostStore = () => stores.postStore
+```
+
+### 2. 避免内存泄漏
+
+```typescript
+import { reaction, IReactionDisposer } from 'mobx'
+
+class Component {
+  private disposers: IReactionDisposer[] = []
+
+  mount() {
+    // 保存 disposer
+    this.disposers.push(
+      reaction(
+        () => userStore.totalCount,
+        (count) => console.log('Count:', count)
+      )
+    )
+
+    this.disposers.push(
+      autorun(() => {
+        console.log('Users:', userStore.all)
+      })
+    )
+  }
+
+  unmount() {
+    // 清理所有 disposer
+    this.disposers.forEach(disposer => disposer())
+    this.disposers = []
+  }
+}
+```
+
+### 3. 类型安全
+
+```typescript
+// 定义类型
+interface User {
+  id: string
+  email: string
+  name: string
+  role: 'admin' | 'user'
+  isActive: boolean
+}
+
+// 使用泛型
+class TypedModelStore<T> {
+  @observable
+  records: Map<string, T> = new Map()
+
+  @computed
+  get all(): T[] {
+    return Array.from(this.records.values())
+  }
+
+  @action
+  set(id: string, record: T) {
+    this.records.set(id, record)
+  }
+}
+
+// 创建 typed store
+const userStore = new TypedModelStore<User>()
+```
+
+## 下一步
+
+了解其他核心层：
+
+- [Model Layer](/docs/engine-core-layers-model-layer) - 领域模型定义
+- [Repository Layer](/docs/engine-core-layers-repository-layer) - 数据访问协调
+- [Data Access Layer](/docs/engine-core-layers-data-access-layer) - 数据源访问
+
+或查看：
+
+- [State Examples](/docs/engine-state-overview) - 完整的状态管理示例
+- [Architecture Overview](/docs/engine-architecture-overview) - 整体架构
+
+---
+
+**最后更新**: 2025-10-31

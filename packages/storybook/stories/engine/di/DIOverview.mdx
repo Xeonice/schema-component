@@ -1,0 +1,304 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/DI/Overview" />
+
+# Dependency Injection (DI)
+
+The DI module provides a powerful dependency injection container based on InversifyJS, enabling loose coupling, testability, and better code organization in your applications.
+
+## What is Dependency Injection?
+
+Dependency Injection is a design pattern where objects receive their dependencies from external sources rather than creating them internally. This approach provides several benefits:
+
+- **Loose Coupling**: Components depend on abstractions rather than concrete implementations
+- **Testability**: Easy to mock dependencies in unit tests
+- **Flexibility**: Swap implementations without changing consuming code
+- **Maintainability**: Clear dependency relationships make code easier to understand
+
+## Core Concepts
+
+### Container
+
+The Container is the heart of the DI system. It manages the creation, lifecycle, and resolution of services.
+
+```typescript
+import { createContainer } from '@schema-component/engine'
+
+const container = createContainer()
+```
+
+### Type Identifiers
+
+Services are registered and retrieved using Symbol-based type identifiers:
+
+```typescript
+const LOGGER_TYPE = Symbol.for('Logger')
+const HTTP_CLIENT_TYPE = Symbol.for('HttpClient')
+```
+
+The engine provides predefined type identifiers in the `TYPES` constant for common services.
+
+## Lifecycle Management
+
+The DI container supports two lifecycle modes:
+
+### Singleton (Default)
+
+A single instance is created and shared across all requests:
+
+```typescript
+container.bind(LOGGER_TYPE).to(Logger).inSingletonScope()
+// or simply (Singleton is default):
+container.bind(LOGGER_TYPE).to(Logger)
+```
+
+**Use cases:**
+- Stateless services (loggers, validators)
+- Shared resources (database connections, caches)
+- Configuration objects
+- Event buses
+
+### Transient
+
+A new instance is created for each request:
+
+```typescript
+container.bind(REQUEST_TYPE).to(Request).inTransientScope()
+```
+
+**Use cases:**
+- Request-specific objects
+- Stateful services with short lifetimes
+- Objects that need isolation
+
+## Decorator Support
+
+The module provides TypeScript decorators for cleaner dependency management:
+
+### @injectable
+
+Marks a class as injectable, allowing the container to manage its instantiation:
+
+```typescript
+import { injectable } from '@schema-component/engine'
+
+@injectable()
+class Logger {
+  log(message: string) {
+    console.log(message)
+  }
+}
+```
+
+### @inject
+
+Injects dependencies into constructor parameters:
+
+```typescript
+import { injectable, inject } from '@schema-component/engine'
+
+@injectable()
+class UserService {
+  constructor(
+    @inject(TYPES.Logger) private logger: Logger,
+    @inject(TYPES.HttpClient) private http: HttpClient
+  ) {}
+
+  async getUser(id: string) {
+    this.logger.log(`Fetching user ${id}`)
+    return this.http.get(`/users/${id}`)
+  }
+}
+```
+
+### @optional
+
+Makes a dependency optional (won't throw if not bound):
+
+```typescript
+import { injectable, inject, optional } from '@schema-component/engine'
+
+@injectable()
+class Service {
+  constructor(
+    @inject(TYPES.Logger) @optional() private logger?: Logger
+  ) {}
+
+  log(message: string) {
+    this.logger?.log(message)
+  }
+}
+```
+
+### @named
+
+Resolves named bindings when multiple implementations exist:
+
+```typescript
+import { injectable, inject, named } from '@schema-component/engine'
+
+// Bind multiple implementations
+container.bind(TYPES.Database).to(MySQLDatabase).whenTargetNamed('mysql')
+container.bind(TYPES.Database).to(PostgresDatabase).whenTargetNamed('postgres')
+
+@injectable()
+class Repository {
+  constructor(
+    @inject(TYPES.Database) @named('mysql') private db: Database
+  ) {}
+}
+```
+
+## Model Decorators
+
+The DI module provides specialized decorators for model development:
+
+### @Model
+
+Marks a class as a Model and automatically makes it injectable:
+
+```typescript
+import { Model, Field, Action } from '@schema-component/engine'
+
+@Model('User')
+class UserModel {
+  @Field({ type: 'string', required: true })
+  name: string
+
+  @Field({ type: 'string', required: true })
+  email: string
+
+  @Action()
+  async activate(id: string) {
+    // activation logic
+  }
+}
+```
+
+### @Field
+
+Defines model fields with metadata:
+
+```typescript
+@Field({ type: 'string', required: true, unique: true })
+email: string
+
+@Field({ type: 'number', default: 0 })
+loginCount: number
+```
+
+### @Hook
+
+Defines lifecycle hooks:
+
+```typescript
+@Hook('beforeCreate')
+async hashPassword(data: any) {
+  data.password = await bcrypt.hash(data.password, 10)
+}
+
+@Hook('afterUpdate')
+async notifyChange(data: any) {
+  await this.notificationService.send('User updated')
+}
+```
+
+### @Action
+
+Marks methods as actions that can be invoked:
+
+```typescript
+@Action()
+async sendEmail(userId: string, subject: string, body: string) {
+  // email sending logic
+}
+
+@Action('resetPassword')
+async reset(userId: string) {
+  // password reset logic
+}
+```
+
+### @Method
+
+Marks custom methods with metadata:
+
+```typescript
+@Method()
+async calculateStatistics(userId: string) {
+  // calculation logic
+}
+```
+
+## Benefits of Using DI
+
+### 1. Testing
+
+Easily mock dependencies in unit tests:
+
+```typescript
+const mockLogger = {
+  log: jest.fn()
+}
+
+container.bind(TYPES.Logger).toConstantValue(mockLogger)
+const service = container.get(TYPES.UserService)
+// service now uses mockLogger
+```
+
+### 2. Configuration
+
+Change implementations based on environment:
+
+```typescript
+if (process.env.NODE_ENV === 'production') {
+  container.bind(TYPES.Logger).to(ProductionLogger)
+} else {
+  container.bind(TYPES.Logger).to(DevelopmentLogger)
+}
+```
+
+### 3. Modularity
+
+Organize code into independent, reusable modules:
+
+```typescript
+// auth-module.ts
+export function registerAuthServices(container: Container) {
+  container.bind(TYPES.AuthService).to(AuthService)
+  container.bind(TYPES.TokenService).to(TokenService)
+}
+
+// app.ts
+registerAuthServices(container)
+```
+
+### 4. Maintainability
+
+Clear dependency graphs make code easier to understand and refactor:
+
+```typescript
+// All dependencies are explicit and visible in constructor
+@injectable()
+class OrderService {
+  constructor(
+    @inject(TYPES.Logger) private logger: Logger,
+    @inject(TYPES.PaymentService) private payment: PaymentService,
+    @inject(TYPES.InventoryService) private inventory: InventoryService,
+    @inject(TYPES.NotificationService) private notification: NotificationService
+  ) {}
+}
+```
+
+## Best Practices
+
+1. **Use type identifiers consistently**: Define all identifiers in a central location
+2. **Prefer constructor injection**: Makes dependencies explicit and testable
+3. **Choose appropriate lifecycle**: Use Singleton for stateless services, Transient for stateful
+4. **Keep constructors simple**: Only assign dependencies, do work in methods
+5. **Use interfaces**: Bind to abstractions, not concrete implementations
+6. **Document dependencies**: Use JSDoc to describe what each dependency does
+
+## Next Steps
+
+Explore the interactive examples in the Container stories to see the DI system in action!

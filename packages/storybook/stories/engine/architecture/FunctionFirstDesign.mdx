@@ -1,0 +1,504 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Architecture/Function-First Design" />
+
+# 函数式优先设计（Function-First）
+
+Engine 采用**函数式优先**的设计理念，核心配置使用**可执行函数**而非静态配置对象。
+
+## 核心理念
+
+传统的配置驱动方式存在局限性：
+- ❌ 需要额外的执行器来解析配置
+- ❌ 灵活性受限于配置结构
+- ❌ 难以访问运行时上下文
+- ❌ 类型推导不够智能
+
+函数式优先的优势：
+- ✅ 直接可调用，无需额外执行器
+- ✅ 完全的自定义能力
+- ✅ 可访问 context 和依赖
+- ✅ 更好的类型安全和推导
+- ✅ 符合直觉，易于理解
+
+## 1. APIs 是可执行函数
+
+### 传统方式 vs 函数式方式
+
+```typescript
+// ❌ 传统方式：配置对象
+apis: {
+  getList: {
+    url: '/api/users',
+    method: 'GET',
+    transform: (data) => ({ users: data.items, total: data.count })
+  }
+}
+
+// 需要额外的执行器
+const executor = createApiExecutor(UserModel.apis.getList)
+const result = await executor.execute({ page: 1 })
+```
+
+```typescript
+// ✅ 函数式方式：可执行函数
+apis: {
+  getList: async (params) => {
+    const response = await httpClient.get('/api/users', { params })
+    return {
+      data: response.data.users,
+      total: response.data.total
+    }
+  },
+
+  getOne: async (id) => {
+    const response = await httpClient.get(`/api/users/${id}`)
+    return response.data
+  },
+
+  createOne: async (data) => {
+    const response = await httpClient.post('/api/users', data)
+    return response.data
+  }
+}
+
+// 直接调用函数
+const users = await UserModel.apis.getList({ page: 1, pageSize: 10 })
+const user = await UserModel.apis.getOne('user-123')
+```
+
+### 优势详解
+
+#### ✅ 直接可调用
+
+无需任何中间层，API 定义即可使用：
+
+```typescript
+// 配置对象方式
+const config = UserModel.apis.getList
+const executor = createExecutor(config)
+const result = await executor.execute(params)
+
+// 函数式方式
+const result = await UserModel.apis.getList(params)
+```
+
+#### ✅ 完全自定义
+
+函数内部可以实现任意复杂逻辑：
+
+```typescript
+apis: {
+  getActiveUsers: async (params) => {
+    // 1. 先获取所有用户
+    const allUsers = await httpClient.get('/api/users', { params })
+
+    // 2. 过滤活跃用户
+    const activeUsers = allUsers.data.filter(u => u.isActive)
+
+    // 3. 并行获取每个用户的详细信息
+    const detailedUsers = await Promise.all(
+      activeUsers.map(u => httpClient.get(`/api/users/${u.id}/details`))
+    )
+
+    // 4. 组合数据
+    return {
+      data: detailedUsers.map((d, i) => ({
+        ...activeUsers[i],
+        ...d.data
+      })),
+      total: activeUsers.length
+    }
+  }
+}
+```
+
+#### ✅ 错误处理
+
+完整的错误处理控制：
+
+```typescript
+apis: {
+  getList: async (params) => {
+    try {
+      const response = await httpClient.get('/api/users', { params })
+      return {
+        data: response.data.users || [],
+        total: response.data.total || 0
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error)
+      // 返回默认值而不是抛出错误
+      return { data: [], total: 0 }
+    }
+  }
+}
+```
+
+## 2. Actions 是可执行函数
+
+### 访问 Context
+
+Actions 可以访问 Model Context，获取 repository、eventBus 等：
+
+```typescript
+// ❌ 传统方式：配置对象
+actions: {
+  activate: {
+    type: 'server',
+    method: 'activate',
+    // 无法访问 repository 或 eventBus
+  }
+}
+
+// ✅ 函数式方式：可访问 context
+actions: (context) => ({
+  activate: async (params) => {
+    const { id } = params
+
+    // 访问 repository
+    const result = await context.repository.updateOne(id, { isActive: true })
+
+    // 发布事件
+    context.eventBus.publish({
+      type: 'user:activated',
+      payload: { id, user: result }
+    })
+
+    return result
+  },
+
+  deactivate: async (params) => {
+    const { id } = params
+    const result = await context.repository.updateOne(id, { isActive: false })
+
+    context.eventBus.publish({
+      type: 'user:deactivated',
+      payload: { id, user: result }
+    })
+
+    return result
+  }
+})
+
+// 使用：直接调用函数
+await UserModel.actions.activate({ id: 'user-123' })
+```
+
+### 复杂业务逻辑编排
+
+Actions 可以协调多个操作：
+
+```typescript
+actions: (context) => ({
+  approveUser: async ({ id }) => {
+    // 1. 更新用户状态
+    const user = await context.repository.updateOne(id, {
+      status: 'approved',
+      approvedAt: new Date()
+    })
+
+    // 2. 发送欢迎邮件
+    await sendWelcomeEmail(user.email)
+
+    // 3. 分配默认角色
+    await assignRole(id, 'user')
+
+    // 4. 创建审计日志
+    await createAuditLog({
+      action: 'user_approved',
+      userId: id,
+      timestamp: new Date()
+    })
+
+    // 5. 发布事件
+    context.eventBus.publish({
+      type: 'user:approved',
+      payload: { id, user }
+    })
+
+    return user
+  }
+})
+```
+
+### Action 组合
+
+可以在 Action 中调用其他 Actions 或 APIs：
+
+```typescript
+actions: (context) => ({
+  // 基础 action
+  sendEmail: async ({ userId, subject, body }) => {
+    const user = await context.repository.getOne(userId)
+    await emailService.send(user.email, subject, body)
+  },
+
+  // 组合 action
+  welcomeNewUser: async ({ userId }) => {
+    // 调用 APIs
+    const user = await UserModel.apis.getOne(userId)
+
+    // 调用其他 actions (需要通过 context 或直接引用)
+    await UserModel.actions.sendEmail({
+      userId,
+      subject: 'Welcome!',
+      body: `Hi ${user.name}, welcome to our platform!`
+    })
+
+    // 更多操作...
+    await UserModel.actions.assignDefaultPermissions({ userId })
+  }
+})
+```
+
+## 3. Views 是函数返回配置
+
+### 动态生成视图配置
+
+```typescript
+// ✅ 函数形式，可根据 context 动态生成
+views: (context) => ({
+  list: {
+    type: 'list',
+    title: `${context.modelName} List`,
+    columns: [
+      { field: 'email', label: 'Email' },
+      { field: 'name', label: 'Name' },
+      // 根据权限动态显示列
+      ...(context.hasPermission('admin') ? [
+        { field: 'role', label: 'Role' },
+        { field: 'createdAt', label: 'Created' }
+      ] : [])
+    ],
+    // 根据状态动态显示操作
+    actions: [
+      'view',
+      ...(context.canEdit ? ['edit'] : []),
+      ...(context.canDelete ? ['delete'] : [])
+    ]
+  },
+
+  form: {
+    type: 'form',
+    title: context.isCreating ? 'Create User' : 'Edit User',
+    fields: [
+      'name',
+      'email',
+      // 仅管理员可编辑角色
+      ...(context.hasPermission('admin') ? ['role'] : [])
+    ]
+  }
+})
+
+// 使用：调用函数获取配置
+const viewConfigs = UserModel.views(context)
+const listView = viewConfigs.list
+```
+
+### 配置仍保持声明式
+
+虽然是函数返回，但返回的仍然是声明式配置：
+
+```typescript
+views: (context) => {
+  // 可以在函数内部进行计算
+  const baseColumns = [
+    { field: 'name', label: 'Name' },
+    { field: 'email', label: 'Email' }
+  ]
+
+  const adminColumns = context.isAdmin ? [
+    { field: 'role', label: 'Role' },
+    { field: 'permissions', label: 'Permissions' }
+  ] : []
+
+  // 返回声明式配置
+  return {
+    list: {
+      type: 'list',
+      columns: [...baseColumns, ...adminColumns],
+      filters: context.isAdmin ? ['role', 'status'] : ['status']
+    }
+  }
+}
+```
+
+## 对比总结
+
+| 特性 | 配置对象方式 | 函数式方式 |
+|------|------------|-----------|
+| **可执行性** | 需要额外执行器 | ✅ 直接可调用 |
+| **灵活性** | 受限于配置结构 | ✅ 完全自定义 |
+| **上下文访问** | 难以访问 | ✅ 通过参数访问 |
+| **类型安全** | 配置类型 | ✅ 函数签名类型 |
+| **可测试性** | 需要模拟执行器 | ✅ 直接测试函数 |
+| **学习曲线** | 需要学习配置结构 | ✅ 符合直觉 |
+| **业务逻辑** | 受限 | ✅ 任意复杂度 |
+| **依赖注入** | 困难 | ✅ 通过 context |
+| **错误处理** | 统一处理 | ✅ 细粒度控制 |
+| **IDE 支持** | 一般 | ✅ 完整提示 |
+
+## 实际应用示例
+
+### 完整的 Model 定义
+
+```typescript
+const OrderModel = defineModel({
+  name: 'Order',
+
+  schema: defineSchema({
+    name: 'Order',
+    fields: {
+      id: field.uuid({ primary: true }),
+      orderNumber: field.string({ required: true }),
+      customerId: field.string({ required: true }),
+      items: field.json({ required: true }),
+      total: field.number({ required: true }),
+      status: field.enum({
+        values: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
+      })
+    }
+  }),
+
+  // APIs: 可执行函数
+  apis: {
+    getList: async (params) => {
+      const response = await httpClient.get('/api/orders', { params })
+      return {
+        data: response.data.orders,
+        total: response.data.total
+      }
+    },
+
+    getOrderWithCustomer: async (orderId) => {
+      const [order, customer] = await Promise.all([
+        httpClient.get(`/api/orders/${orderId}`),
+        httpClient.get(`/api/customers/${order.customerId}`)
+      ])
+      return { ...order.data, customer: customer.data }
+    }
+  },
+
+  // Actions: 可访问 context 的函数
+  actions: (context) => ({
+    confirm: async ({ id }) => {
+      const order = await context.repository.updateOne(id, {
+        status: 'confirmed',
+        confirmedAt: new Date()
+      })
+
+      context.eventBus.publish({
+        type: 'order:confirmed',
+        payload: { id, order }
+      })
+
+      await sendConfirmationEmail(order.customerId, order.orderNumber)
+
+      return order
+    },
+
+    ship: async ({ id, trackingNumber }) => {
+      const order = await context.repository.updateOne(id, {
+        status: 'shipped',
+        shippedAt: new Date(),
+        trackingNumber
+      })
+
+      context.eventBus.publish({
+        type: 'order:shipped',
+        payload: { id, order, trackingNumber }
+      })
+
+      return order
+    },
+
+    cancel: async ({ id, reason }) => {
+      // 复杂的取消逻辑
+      const order = await context.repository.getOne(id)
+
+      if (order.status === 'delivered') {
+        throw new Error('Cannot cancel delivered order')
+      }
+
+      // 退款
+      if (order.paid) {
+        await refundPayment(order.id, order.total)
+      }
+
+      // 恢复库存
+      await restoreInventory(order.items)
+
+      // 更新状态
+      const cancelled = await context.repository.updateOne(id, {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancellationReason: reason
+      })
+
+      context.eventBus.publish({
+        type: 'order:cancelled',
+        payload: { id, order: cancelled, reason }
+      })
+
+      return cancelled
+    }
+  }),
+
+  // Views: 函数返回配置
+  views: (context) => ({
+    list: {
+      type: 'list',
+      title: 'Orders',
+      columns: [
+        { field: 'orderNumber', label: 'Order #', sortable: true },
+        { field: 'customerName', label: 'Customer' },
+        { field: 'total', label: 'Total', type: 'currency' },
+        { field: 'status', label: 'Status', type: 'badge' },
+        { field: 'createdAt', label: 'Date', type: 'date' }
+      ],
+      filters: ['status', 'dateRange'],
+      actions: ['view', 'confirm', 'ship', 'cancel']
+    },
+
+    detail: {
+      type: 'detail',
+      title: 'Order Details',
+      sections: [
+        {
+          title: 'Order Information',
+          fields: ['orderNumber', 'status', 'createdAt']
+        },
+        {
+          title: 'Customer',
+          fields: ['customerName', 'customerEmail', 'shippingAddress']
+        },
+        {
+          title: 'Items',
+          component: 'OrderItemsTable'
+        }
+      ]
+    }
+  })
+})
+```
+
+## 总结
+
+函数式优先设计带来的核心价值：
+
+1. **简洁性** - 减少抽象层，代码更直观
+2. **灵活性** - 支持任意复杂的业务逻辑
+3. **类型安全** - 完整的 TypeScript 类型推导
+4. **可测试性** - 纯函数易于测试
+5. **可维护性** - 业务逻辑集中，易于理解和修改
+
+这种设计使得 Engine 既保持了声明式配置的清晰性，又具备了命令式编程的灵活性，是两者的最佳结合。
+
+---
+
+**相关文档**:
+- [Architecture Overview](/docs/engine-architecture-overview) - 整体架构
+- [Model Layer](/docs/engine-core-layers-model-layer) - Model 层详解
+
+**最后更新**: 2025-10-31

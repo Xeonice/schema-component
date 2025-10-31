@@ -1,0 +1,688 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Core Layers/Repository Layer" />
+
+# Repository 层（数据访问协调）
+
+Repository 层负责协调数据访问，提供统一的 CRUD 接口，通过 Data Access Layer 与外部数据源对接。
+
+## 核心职责
+
+Repository 层在 Engine 架构中扮演关键角色：
+
+- **数据访问抽象** - 提供统一的 CRUD 接口
+- **缓存管理** - 实现智能缓存策略
+- **数据转换** - 在业务层和数据层之间转换数据格式
+- **协调通信** - 与 Data Access Layer 协作
+
+## Repository 接口
+
+Repository 定义了标准的数据访问方法：
+
+```typescript
+interface IRepository {
+  // 基础 CRUD
+  getList(params: GetListParams): Promise<GetListResult>
+  getOne(id: string | number): Promise<any>
+  createOne(data: any): Promise<any>
+  updateOne(id: string | number, data: any): Promise<any>
+  deleteOne(id: string | number): Promise<boolean>
+
+  // 批量操作
+  getMany(ids: Array<string | number>): Promise<any[]>
+  createMany(data: any[]): Promise<any[]>
+  updateMany(ids: Array<string | number>, data: any): Promise<any[]>
+  deleteMany(ids: Array<string | number>): Promise<boolean>
+
+  // 查询
+  search(criteria: SearchCriteria): Promise<SearchResult>
+}
+```
+
+## 参数接口
+
+### GetListParams
+
+用于列表查询的参数：
+
+```typescript
+interface GetListParams {
+  pagination?: {
+    page: number
+    pageSize: number
+  }
+  sort?: Array<{
+    field: string
+    order: 'ASC' | 'DESC'
+  }>
+  filter?: Record<string, any>
+}
+```
+
+### GetListResult
+
+列表查询的返回结果：
+
+```typescript
+interface GetListResult {
+  data: any[]
+  total: number
+  page?: number
+  pageSize?: number
+}
+```
+
+## Repository 实现
+
+完整的 Repository 实现示例：
+
+```typescript
+class Repository implements IRepository {
+  constructor(
+    private modelName: string,
+    private dataAccessClient: IDataAccessClient,
+    private cache?: ICache
+  ) {}
+
+  async getList(params: GetListParams): Promise<GetListResult> {
+    // 1. 检查缓存
+    const cacheKey = this.buildCacheKey('list', params)
+    const cached = await this.cache?.get(cacheKey)
+    if (cached) return cached
+
+    // 2. 通过 Data Access Client 获取数据
+    const result = await this.dataAccessClient.getList(this.modelName, params)
+
+    // 3. 转换数据格式（如果需要）
+    const transformed = this.transformListResult(result)
+
+    // 4. 更新缓存
+    await this.cache?.set(cacheKey, transformed)
+
+    // 5. 返回结果
+    return transformed
+  }
+
+  async getOne(id: string | number): Promise<any> {
+    const cacheKey = this.buildCacheKey('one', id)
+    const cached = await this.cache?.get(cacheKey)
+    if (cached) return cached
+
+    const result = await this.dataAccessClient.getOne(this.modelName, id)
+    await this.cache?.set(cacheKey, result)
+
+    return result
+  }
+
+  async createOne(data: any): Promise<any> {
+    const result = await this.dataAccessClient.createOne(this.modelName, data)
+
+    // 清除相关缓存
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+    return result
+  }
+
+  async updateOne(id: string | number, data: any): Promise<any> {
+    const result = await this.dataAccessClient.updateOne(this.modelName, id, data)
+
+    // 清除相关缓存
+    await this.cache?.delete(this.buildCacheKey('one', id))
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+    return result
+  }
+
+  async deleteOne(id: string | number): Promise<boolean> {
+    const result = await this.dataAccessClient.deleteOne(this.modelName, id)
+
+    // 清除相关缓存
+    await this.cache?.delete(this.buildCacheKey('one', id))
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+    return result
+  }
+
+  // 批量操作
+  async getMany(ids: Array<string | number>): Promise<any[]> {
+    // 尝试从缓存获取
+    const cached: any[] = []
+    const missing: Array<string | number> = []
+
+    for (const id of ids) {
+      const cacheKey = this.buildCacheKey('one', id)
+      const item = await this.cache?.get(cacheKey)
+      if (item) {
+        cached.push(item)
+      } else {
+        missing.push(id)
+      }
+    }
+
+    // 批量获取缺失的数据
+    if (missing.length > 0) {
+      const fetched = await this.dataAccessClient.getMany(this.modelName, missing)
+
+      // 更新缓存
+      for (const item of fetched) {
+        const cacheKey = this.buildCacheKey('one', item.id)
+        await this.cache?.set(cacheKey, item)
+      }
+
+      return [...cached, ...fetched]
+    }
+
+    return cached
+  }
+
+  async createMany(data: any[]): Promise<any[]> {
+    const result = await this.dataAccessClient.createMany(this.modelName, data)
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+    return result
+  }
+
+  async updateMany(ids: Array<string | number>, data: any): Promise<any[]> {
+    const result = await this.dataAccessClient.updateMany(this.modelName, ids, data)
+
+    // 清除受影响的缓存
+    for (const id of ids) {
+      await this.cache?.delete(this.buildCacheKey('one', id))
+    }
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+    return result
+  }
+
+  async deleteMany(ids: Array<string | number>): Promise<boolean> {
+    const result = await this.dataAccessClient.deleteMany(this.modelName, ids)
+
+    // 清除受影响的缓存
+    for (const id of ids) {
+      await this.cache?.delete(this.buildCacheKey('one', id))
+    }
+    await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+    return result
+  }
+
+  // 工具方法
+  private buildCacheKey(operation: string, params: any): string {
+    return `${this.modelName}:${operation}:${JSON.stringify(params)}`
+  }
+
+  private transformListResult(result: any): GetListResult {
+    // 实现数据转换逻辑
+    // 将不同后端格式统一为标准格式
+    return result
+  }
+}
+```
+
+## 创建 Repository
+
+### 基础创建
+
+```typescript
+import { Repository } from '@schema-component/engine'
+
+// 创建 Repository 实例
+const userRepository = new Repository(
+  'User',
+  dataAccessClient
+)
+
+// 使用 Repository
+const users = await userRepository.getList({
+  pagination: { page: 1, pageSize: 10 }
+})
+```
+
+### 带缓存的创建
+
+```typescript
+import { Repository, MemoryCache } from '@schema-component/engine'
+
+// 创建缓存实例
+const cache = new MemoryCache({
+  ttl: 300000, // 5分钟
+  maxSize: 1000
+})
+
+// 创建带缓存的 Repository
+const userRepository = new Repository(
+  'User',
+  dataAccessClient,
+  cache
+)
+```
+
+### 通过 DI 容器创建
+
+```typescript
+import { Container } from 'inversify'
+import { TYPES } from '@schema-component/engine'
+
+// 配置容器
+const container = new Container()
+
+// 绑定依赖
+container.bind(TYPES.DataAccessClient).to(HttpDataAccessClient)
+container.bind(TYPES.Cache).to(MemoryCache)
+container.bind(TYPES.Repository).to(Repository)
+
+// 使用
+const userRepository = container.get<IRepository>(TYPES.Repository)
+```
+
+## 使用示例
+
+### 基本 CRUD 操作
+
+```typescript
+// 获取列表
+const result = await userRepository.getList({
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', order: 'DESC' }],
+  filter: { role: 'admin' }
+})
+
+console.log('Total users:', result.total)
+console.log('Users:', result.data)
+
+// 获取单个记录
+const user = await userRepository.getOne('user-123')
+console.log('User:', user)
+
+// 创建记录
+const newUser = await userRepository.createOne({
+  email: 'test@example.com',
+  name: 'Test User',
+  role: 'user'
+})
+
+// 更新记录
+const updatedUser = await userRepository.updateOne('user-123', {
+  name: 'Updated Name',
+  role: 'admin'
+})
+
+// 删除记录
+const deleted = await userRepository.deleteOne('user-123')
+console.log('Deleted:', deleted)
+```
+
+### 批量操作
+
+```typescript
+// 批量获取
+const users = await userRepository.getMany(['user-1', 'user-2', 'user-3'])
+
+// 批量创建
+const newUsers = await userRepository.createMany([
+  { email: 'user1@example.com', name: 'User 1' },
+  { email: 'user2@example.com', name: 'User 2' },
+  { email: 'user3@example.com', name: 'User 3' }
+])
+
+// 批量更新
+const updated = await userRepository.updateMany(
+  ['user-1', 'user-2', 'user-3'],
+  { isActive: false }
+)
+
+// 批量删除
+const deleted = await userRepository.deleteMany(['user-1', 'user-2', 'user-3'])
+```
+
+### 高级查询
+
+```typescript
+// 复杂查询
+const result = await userRepository.search({
+  filter: {
+    role: 'admin',
+    isActive: true,
+    createdAt: { gte: '2024-01-01' }
+  },
+  sort: [
+    { field: 'name', order: 'ASC' },
+    { field: 'createdAt', order: 'DESC' }
+  ],
+  pagination: { page: 1, pageSize: 20 }
+})
+```
+
+## 缓存策略
+
+### 内存缓存
+
+```typescript
+interface ICacheStrategy {
+  get(key: string): Promise<any>
+  set(key: string, value: any, ttl?: number): Promise<void>
+  delete(key: string): Promise<void>
+  invalidate(pattern: string): Promise<void>
+  clear(): Promise<void>
+}
+
+class MemoryCacheStrategy implements ICacheStrategy {
+  private cache: Map<string, { value: any; expiry: number }> = new Map()
+
+  async get(key: string): Promise<any> {
+    const item = this.cache.get(key)
+    if (!item) return undefined
+
+    if (Date.now() > item.expiry) {
+      this.cache.delete(key)
+      return undefined
+    }
+
+    return item.value
+  }
+
+  async set(key: string, value: any, ttl: number = 300000): Promise<void> {
+    this.cache.set(key, {
+      value,
+      expiry: Date.now() + ttl
+    })
+  }
+
+  async delete(key: string): Promise<void> {
+    this.cache.delete(key)
+  }
+
+  async invalidate(pattern: string): Promise<void> {
+    // 支持模式匹配删除
+    const regex = new RegExp(pattern.replace('*', '.*'))
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key)
+      }
+    }
+  }
+
+  async clear(): Promise<void> {
+    this.cache.clear()
+  }
+}
+```
+
+### 缓存失效策略
+
+```typescript
+// 1. 写操作自动失效相关缓存
+async createOne(data: any): Promise<any> {
+  const result = await this.dataAccessClient.createOne(this.modelName, data)
+
+  // 失效列表缓存
+  await this.cache?.invalidate(`${this.modelName}:list:*`)
+
+  return result
+}
+
+// 2. 读操作自动缓存
+async getOne(id: string | number): Promise<any> {
+  const cacheKey = this.buildCacheKey('one', id)
+
+  // 先查缓存
+  const cached = await this.cache?.get(cacheKey)
+  if (cached) return cached
+
+  // 缓存未命中，从数据源获取
+  const result = await this.dataAccessClient.getOne(this.modelName, id)
+
+  // 写入缓存
+  await this.cache?.set(cacheKey, result, 300000) // 5分钟 TTL
+
+  return result
+}
+
+// 3. 手动清除缓存
+async clearCache(): Promise<void> {
+  await this.cache?.invalidate(`${this.modelName}:*`)
+}
+```
+
+## 数据转换
+
+Repository 负责在业务层和数据层之间转换数据格式：
+
+```typescript
+class Repository {
+  // 转换列表结果
+  private transformListResult(result: any): GetListResult {
+    // 处理不同的后端响应格式
+
+    // 格式 1: 直接返回数组
+    if (Array.isArray(result)) {
+      return {
+        data: result,
+        total: result.length
+      }
+    }
+
+    // 格式 2: 标准格式 { data: [], total: number }
+    if (result.data && Array.isArray(result.data)) {
+      return {
+        data: result.data,
+        total: result.total || result.data.length,
+        page: result.page,
+        pageSize: result.pageSize
+      }
+    }
+
+    // 格式 3: 分页格式 { items: [], count: number }
+    if (result.items && Array.isArray(result.items)) {
+      return {
+        data: result.items,
+        total: result.count || result.items.length
+      }
+    }
+
+    // 其他格式
+    return result
+  }
+
+  // 转换单个记录
+  private transformRecord(record: any): any {
+    // 字段名映射
+    return {
+      id: record.id || record._id,
+      ...record,
+      createdAt: record.created_at || record.createdAt,
+      updatedAt: record.updated_at || record.updatedAt
+    }
+  }
+}
+```
+
+## Repository 工厂
+
+创建 Repository 的工厂函数：
+
+```typescript
+interface RepositoryFactoryConfig {
+  dataAccessClient: IDataAccessClient
+  cache?: ICache
+  enableCache?: boolean
+  cacheConfig?: {
+    ttl?: number
+    maxSize?: number
+  }
+}
+
+class RepositoryFactory {
+  constructor(private config: RepositoryFactoryConfig) {}
+
+  create<T>(modelName: string): IRepository<T> {
+    const { dataAccessClient, enableCache, cacheConfig } = this.config
+
+    // 创建缓存实例
+    let cache: ICache | undefined
+    if (enableCache) {
+      cache = new MemoryCache(cacheConfig)
+    }
+
+    // 创建 Repository
+    return new Repository(modelName, dataAccessClient, cache)
+  }
+}
+
+// 使用
+const factory = new RepositoryFactory({
+  dataAccessClient: httpClient,
+  enableCache: true,
+  cacheConfig: {
+    ttl: 300000,
+    maxSize: 1000
+  }
+})
+
+const userRepository = factory.create('User')
+const postRepository = factory.create('Post')
+```
+
+## 架构关系
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Model Layer                   │
+│  • 业务逻辑                                     │
+│  • 生命周期钩子                                 │
+└─────────────────┬───────────────────────────────┘
+                  │ 使用
+                  ▼
+┌─────────────────────────────────────────────────┐
+│                Repository Layer                 │
+│  ┌──────────────────────────────────────────┐  │
+│  │ • 缓存管理                               │  │
+│  │ • 数据转换                               │  │
+│  │ • 统一接口                               │  │
+│  └──────────────┬───────────────────────────┘  │
+└─────────────────┼─────────────────────────────┘
+                  │ 委托
+                  ▼
+┌─────────────────────────────────────────────────┐
+│            Data Access Client Layer             │
+│  • HTTP / GraphQL / WebSocket                   │
+│  • 实际的数据源通信                             │
+└─────────────────────────────────────────────────┘
+```
+
+## 最佳实践
+
+### 1. 错误处理
+
+```typescript
+async getOne(id: string | number): Promise<any> {
+  try {
+    // 先查缓存
+    const cached = await this.cache?.get(this.buildCacheKey('one', id))
+    if (cached) return cached
+
+    // 从数据源获取
+    const result = await this.dataAccessClient.getOne(this.modelName, id)
+
+    // 更新缓存
+    await this.cache?.set(this.buildCacheKey('one', id), result)
+
+    return result
+  } catch (error) {
+    // 记录错误
+    console.error(`Failed to get ${this.modelName}:${id}`, error)
+
+    // 抛出业务异常
+    throw new RepositoryError(`Failed to fetch ${this.modelName}`, error)
+  }
+}
+```
+
+### 2. 事务支持
+
+```typescript
+class Repository {
+  async transaction<T>(
+    callback: (repo: IRepository) => Promise<T>
+  ): Promise<T> {
+    // 开始事务
+    await this.dataAccessClient.beginTransaction?.()
+
+    try {
+      const result = await callback(this)
+
+      // 提交事务
+      await this.dataAccessClient.commit?.()
+
+      return result
+    } catch (error) {
+      // 回滚事务
+      await this.dataAccessClient.rollback?.()
+      throw error
+    }
+  }
+}
+
+// 使用
+await userRepository.transaction(async (repo) => {
+  const user = await repo.createOne({ name: 'Test' })
+  await repo.updateOne(user.id, { isActive: true })
+  return user
+})
+```
+
+### 3. 批量操作优化
+
+```typescript
+// 批量操作合并
+class BatchRepository extends Repository {
+  private batchQueue: Map<string, any[]> = new Map()
+  private batchTimer: any
+
+  async createOne(data: any): Promise<any> {
+    return new Promise((resolve) => {
+      // 加入批量队列
+      if (!this.batchQueue.has('create')) {
+        this.batchQueue.set('create', [])
+      }
+
+      this.batchQueue.get('create')!.push({ data, resolve })
+
+      // 延迟执行
+      clearTimeout(this.batchTimer)
+      this.batchTimer = setTimeout(() => this.flushBatch(), 100)
+    })
+  }
+
+  private async flushBatch(): Promise<void> {
+    const createBatch = this.batchQueue.get('create')
+    if (createBatch && createBatch.length > 0) {
+      const dataList = createBatch.map(item => item.data)
+      const results = await this.createMany(dataList)
+
+      // 解析 Promise
+      createBatch.forEach((item, index) => {
+        item.resolve(results[index])
+      })
+
+      this.batchQueue.delete('create')
+    }
+  }
+}
+```
+
+## 下一步
+
+了解其他核心层：
+
+- [Model Layer](/docs/engine-core-layers-model-layer) - 领域模型定义
+- [State Layer](/docs/engine-core-layers-state-layer) - 响应式状态管理
+- [Data Access Layer](/docs/engine-core-layers-data-access-layer) - 数据源访问
+
+或查看：
+
+- [Architecture Overview](/docs/engine-architecture-overview) - 整体架构
+- [HTTP Client Examples](/docs/engine-http-overview) - HTTP 客户端使用
+
+---
+
+**最后更新**: 2025-10-31
