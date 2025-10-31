@@ -48,6 +48,16 @@ const config = {
       },
       define: {
         'process.env': {}
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: undefined
+          }
+        }
+      },
+      optimizeDeps: {
+        include: ['react', 'react-dom']
       }
     })
   },
