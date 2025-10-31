@@ -1,0 +1,1153 @@
+# ActionRenderer 架构设计（修订版）
+
+## 概述
+
+ActionRenderer 负责将 Model 的 Actions 渲染为交互元素。根据 Action 的性质，分为两大类：
+
+1. **ServerActionRenderer** - 服务端操作（调用 Model Actions，执行业务逻辑）
+2. **ViewActionRenderer** - 视图操作（纯前端交互，不调用服务端）
+
+两类 ActionRenderer 都支持用户自定义渲染为各种 Button 类型（primary、default、link、text 等）。
+
+---
+
+## 1. Action 分类
+
+### 1.1 ServerAction（服务端操作）
+
+触发 Model 层的 Actions，执行业务逻辑，通常涉及数据变更。
+
+**特征**：
+- 调用 `model.actions[actionName](params)`
+- 需要与后端交互
+- 可能有 loading 状态
+- 需要错误处理
+- 可能需要确认提示
+
+**常见场景**：
+- CRUD 操作：create、update、delete
+- 业务操作：activate、approve、publish、archive
+- 批量操作：batchDelete、batchUpdate
+- 数据同步：sync、import、export
+
+**示例**：
+```typescript
+// Model 中定义
+actions: (context) => ({
+  // ServerAction: 激活用户
+  activate: async ({ id }) => {
+    await context.repository.updateOne(id, { status: 'active' })
+    context.eventBus.publish({
+      type: 'user:activated',
+      payload: { userId: id },
+      timestamp: Date.now()
+    })
+  },
+
+  // ServerAction: 批量删除
+  batchDelete: async ({ ids }) => {
+    await context.repository.deleteMany(ids)
+  }
+})
+```
+
+### 1.2 ViewAction（视图操作）
+
+纯前端交互，不涉及后端调用，主要用于 UI 状态变更。
+
+**特征**：
+- 不调用 Model Actions
+- 纯前端状态变更
+- 即时响应，无 loading
+- 通常不需要确认
+
+**常见场景**：
+- 导航：跳转到详情页、编辑页
+- UI 状态：打开 Modal、Drawer、展开/折叠
+- 筛选排序：切换视图、设置过滤器
+- 数据展示：刷新、导出（前端）
+
+**示例**：
+```typescript
+// View 中定义
+{
+  type: 'list',
+  actions: [
+    // ViewAction: 打开创建表单
+    {
+      type: 'view',
+      name: 'openCreateModal',
+      label: 'Create User',
+      handler: (context) => {
+        context.modal.open({
+          title: 'Create User',
+          content: { type: 'form', fields: ['name', 'email'] }
+        })
+      }
+    },
+
+    // ViewAction: 导航到详情页
+    {
+      type: 'view',
+      name: 'goToDetail',
+      label: 'View Details',
+      handler: (context) => {
+        context.navigate(`/users/${context.record.id}`)
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 2. ActionRenderer 类型定义
+
+### 2.1 Action 类型定义
+
+```typescript
+/**
+ * Action 类型
+ */
+export type ActionType = 'server' | 'view'
+
+/**
+ * 按钮渲染类型
+ */
+export type ButtonType = 'primary' | 'default' | 'dashed' | 'text' | 'link'
+
+/**
+ * 按钮尺寸
+ */
+export type ButtonSize = 'small' | 'middle' | 'large'
+
+/**
+ * Action 渲染模式
+ */
+export type ActionRenderMode =
+  | 'button'        // 单个按钮
+  | 'menu'          // 菜单项
+  | 'dropdown'      // 下拉菜单
+  | 'toolbar'       // 工具栏
+  | 'modal'         // 模态框触发
+  | 'drawer'        // 抽屉触发
+  | 'popconfirm'    // 确认气泡
+
+/**
+ * 基础 Action 定义
+ */
+export interface BaseActionDefinition {
+  /** Action 类型 */
+  type: ActionType
+
+  /** Action 名称（对应 Model 中的 action key 或自定义名称） */
+  name: string
+
+  /** 显示文本 */
+  label: string
+
+  /** 图标 */
+  icon?: string
+
+  /** 渲染模式 */
+  renderAs?: ActionRenderMode
+
+  /** 按钮类型 */
+  buttonType?: ButtonType
+
+  /** 按钮尺寸 */
+  size?: ButtonSize
+
+  /** 危险操作（红色按钮） */
+  danger?: boolean
+
+  /** 是否禁用 */
+  disabled?: boolean | ((context: ActionContext) => boolean)
+
+  /** 是否显示 */
+  visible?: boolean | ((context: ActionContext) => boolean)
+
+  /** 工具提示 */
+  tooltip?: string
+
+  /** 确认提示 */
+  confirm?: string | ConfirmConfig
+
+  /** 自定义 CSS 类名 */
+  className?: string
+
+  /** 自定义样式 */
+  style?: Record<string, any>
+}
+
+/**
+ * 确认配置
+ */
+export interface ConfirmConfig {
+  title: string
+  description?: string
+  okText?: string
+  cancelText?: string
+  okType?: ButtonType
+}
+
+/**
+ * ServerAction 定义
+ */
+export interface ServerActionDefinition extends BaseActionDefinition {
+  type: 'server'
+
+  /** 参数获取函数 */
+  getParams?: (context: ActionContext) => any
+
+  /** 成功后的回调 */
+  onSuccess?: (result: any, context: ActionContext) => void
+
+  /** 失败后的回调 */
+  onError?: (error: Error, context: ActionContext) => void
+
+  /** 是否显示 loading */
+  showLoading?: boolean
+
+  /** 成功提示消息 */
+  successMessage?: string | ((result: any) => string)
+
+  /** 失败提示消息 */
+  errorMessage?: string | ((error: Error) => string)
+}
+
+/**
+ * ViewAction 定义
+ */
+export interface ViewActionDefinition extends BaseActionDefinition {
+  type: 'view'
+
+  /** 处理函数（纯前端逻辑） */
+  handler: (context: ActionContext) => void | Promise<void>
+}
+
+/**
+ * Action 定义（联合类型）
+ */
+export type ActionDefinition = ServerActionDefinition | ViewActionDefinition
+
+/**
+ * Action 上下文
+ */
+export interface ActionContext {
+  // Model 信息
+  modelName: string
+  model: IModel
+
+  // 数据信息
+  record?: any       // 当前记录（行操作）
+  records?: any[]    // 选中的多条记录（批量操作）
+  selectedIds?: Array<string | number>  // 选中的 IDs
+
+  // UI 控制
+  modal?: ModalController
+  drawer?: DrawerController
+  message?: MessageController
+  navigate?: (path: string) => void
+
+  // Store（如果有）
+  store?: any
+
+  // 其他上下文
+  [key: string]: any
+}
+
+/**
+ * Modal 控制器
+ */
+export interface ModalController {
+  open: (config: ModalConfig) => void
+  close: () => void
+  update: (config: Partial<ModalConfig>) => void
+}
+
+/**
+ * Drawer 控制器
+ */
+export interface DrawerController {
+  open: (config: DrawerConfig) => void
+  close: () => void
+}
+
+/**
+ * Message 控制器
+ */
+export interface MessageController {
+  success: (msg: string) => void
+  error: (msg: string) => void
+  warning: (msg: string) => void
+  info: (msg: string) => void
+  loading: (msg: string) => () => void  // 返回关闭函数
+}
+
+/**
+ * Modal 配置
+ */
+export interface ModalConfig {
+  title: string
+  content: any  // Form 或自定义内容
+  width?: number
+  footer?: any
+  onOk?: () => void | Promise<void>
+  onCancel?: () => void
+}
+
+/**
+ * Drawer 配置
+ */
+export interface DrawerConfig {
+  title: string
+  content: any
+  width?: number | string
+  placement?: 'left' | 'right' | 'top' | 'bottom'
+  onClose?: () => void
+}
+```
+
+---
+
+## 3. ServerActionRenderer 实现
+
+### 3.1 ServerActionRenderer 接口
+
+```typescript
+export interface IServerActionRenderer {
+  /** 渲染器类型 */
+  renderMode: ActionRenderMode
+
+  /** 渲染 ServerAction */
+  render(action: ServerActionDefinition, context: ActionContext): RenderResult
+}
+```
+
+### 3.2 ServerActionRenderer 基类
+
+```typescript
+export abstract class BaseServerActionRenderer implements IServerActionRenderer {
+  abstract renderMode: ActionRenderMode
+
+  abstract render(action: ServerActionDefinition, context: ActionContext): RenderResult
+
+  /**
+   * 执行 ServerAction
+   */
+  protected async executeServerAction(
+    action: ServerActionDefinition,
+    context: ActionContext
+  ): Promise<void> {
+    // 1. 检查是否需要确认
+    if (action.confirm) {
+      const confirmed = await this.showConfirm(action.confirm, context)
+      if (!confirmed) return
+    }
+
+    // 2. 显示 loading
+    let hideLoading: (() => void) | undefined
+    if (action.showLoading !== false) {
+      hideLoading = context.message?.loading(`${action.label}...`)
+    }
+
+    try {
+      // 3. 获取参数
+      const params = action.getParams?.(context) || {}
+
+      // 4. 执行 Model Action
+      const result = await context.model.actions[action.name](params)
+
+      // 5. 隐藏 loading
+      hideLoading?.()
+
+      // 6. 显示成功消息
+      const successMsg = this.getSuccessMessage(action, result)
+      if (successMsg) {
+        context.message?.success(successMsg)
+      }
+
+      // 7. 成功回调
+      action.onSuccess?.(result, context)
+
+    } catch (error) {
+      // 8. 隐藏 loading
+      hideLoading?.()
+
+      // 9. 显示错误消息
+      const errorMsg = this.getErrorMessage(action, error as Error)
+      if (errorMsg) {
+        context.message?.error(errorMsg)
+      }
+
+      // 10. 失败回调
+      action.onError?.(error as Error, context)
+
+      // 11. 抛出错误（可选）
+      throw error
+    }
+  }
+
+  /**
+   * 显示确认对话框
+   */
+  private async showConfirm(
+    confirm: string | ConfirmConfig,
+    context: ActionContext
+  ): Promise<boolean> {
+    const config = typeof confirm === 'string' ? { title: confirm } : confirm
+
+    return new Promise((resolve) => {
+      context.modal?.open({
+        title: config.title,
+        content: config.description,
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false)
+      })
+    })
+  }
+
+  /**
+   * 获取成功消息
+   */
+  private getSuccessMessage(action: ServerActionDefinition, result: any): string {
+    if (!action.successMessage) {
+      return `${action.label} successful`
+    }
+
+    if (typeof action.successMessage === 'function') {
+      return action.successMessage(result)
+    }
+
+    return action.successMessage
+  }
+
+  /**
+   * 获取错误消息
+   */
+  private getErrorMessage(action: ServerActionDefinition, error: Error): string {
+    if (!action.errorMessage) {
+      return `${action.label} failed: ${error.message}`
+    }
+
+    if (typeof action.errorMessage === 'function') {
+      return action.errorMessage(error)
+    }
+
+    return action.errorMessage
+  }
+
+  /**
+   * 解析 disabled 状态
+   */
+  protected resolveDisabled(action: ServerActionDefinition, context: ActionContext): boolean {
+    if (typeof action.disabled === 'function') {
+      return action.disabled(context)
+    }
+    return action.disabled || false
+  }
+
+  /**
+   * 解析 visible 状态
+   */
+  protected resolveVisible(action: ServerActionDefinition, context: ActionContext): boolean {
+    if (typeof action.visible === 'function') {
+      return action.visible(context)
+    }
+    return action.visible !== false
+  }
+}
+```
+
+### 3.3 ServerAction Button Renderer
+
+```typescript
+export class ServerActionButtonRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'button'
+
+  render(action: ServerActionDefinition, context: ActionContext): RenderResult {
+    // 检查是否可见
+    if (!this.resolveVisible(action, context)) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    return {
+      type: 'Button',
+      props: {
+        text: action.label,
+        icon: action.icon,
+        type: action.buttonType || 'default',
+        size: action.size || 'middle',
+        danger: action.danger,
+        disabled: this.resolveDisabled(action, context),
+        className: action.className,
+        style: action.style,
+        tooltip: action.tooltip,
+        onClick: async () => {
+          await this.executeServerAction(action, context)
+        }
+      }
+    }
+  }
+}
+```
+
+### 3.4 ServerAction Menu Renderer
+
+```typescript
+export class ServerActionMenuRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'menu'
+
+  render(action: ServerActionDefinition, context: ActionContext): RenderResult {
+    if (!this.resolveVisible(action, context)) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    return {
+      type: 'MenuItem',
+      props: {
+        key: action.name,
+        label: action.label,
+        icon: action.icon,
+        danger: action.danger,
+        disabled: this.resolveDisabled(action, context),
+        onClick: async () => {
+          await this.executeServerAction(action, context)
+        }
+      }
+    }
+  }
+}
+```
+
+### 3.5 ServerAction Dropdown Renderer
+
+```typescript
+export class ServerActionDropdownRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'dropdown'
+
+  render(actions: ServerActionDefinition[], context: ActionContext): RenderResult {
+    const visibleActions = actions.filter(action => this.resolveVisible(action, context))
+
+    if (visibleActions.length === 0) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    return {
+      type: 'Dropdown',
+      props: {
+        menu: {
+          items: visibleActions.map(action => ({
+            key: action.name,
+            label: action.label,
+            icon: action.icon,
+            danger: action.danger,
+            disabled: this.resolveDisabled(action, context),
+            onClick: async () => {
+              await this.executeServerAction(action, context)
+            }
+          }))
+        },
+        trigger: ['click']
+      }
+    }
+  }
+}
+```
+
+### 3.6 ServerAction Toolbar Renderer
+
+```typescript
+export class ServerActionToolbarRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'toolbar'
+
+  render(actions: ServerActionDefinition[], context: ActionContext): RenderResult {
+    const visibleActions = actions.filter(action => this.resolveVisible(action, context))
+
+    // 分离主要操作和次要操作
+    const primaryActions = visibleActions.filter(
+      a => a.buttonType === 'primary' || !a.buttonType
+    )
+    const secondaryActions = visibleActions.filter(
+      a => a.buttonType !== 'primary'
+    )
+
+    const buttonRenderer = new ServerActionButtonRenderer()
+
+    return {
+      type: 'Toolbar',
+      props: {
+        left: {
+          type: 'Space',
+          children: primaryActions.map(action =>
+            buttonRenderer.render(action, context)
+          )
+        },
+        right: secondaryActions.length > 0 ? {
+          type: 'Dropdown',
+          children: new ServerActionDropdownRenderer().render(secondaryActions, context)
+        } : undefined
+      }
+    }
+  }
+}
+```
+
+### 3.7 ServerAction Modal Renderer
+
+```typescript
+export class ServerActionModalRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'modal'
+
+  render(action: ServerActionDefinition, context: ActionContext): RenderResult {
+    if (!this.resolveVisible(action, context)) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    return {
+      type: 'ModalTrigger',
+      props: {
+        trigger: {
+          type: 'Button',
+          props: {
+            text: action.label,
+            icon: action.icon,
+            type: action.buttonType || 'default',
+            disabled: this.resolveDisabled(action, context)
+          }
+        },
+        modal: {
+          title: action.label,
+          width: 520,
+          content: action['modalContent'],  // 需要在 action 中指定
+          onOk: async (formData: any) => {
+            const params = action.getParams?.({ ...context, formData }) || formData
+            await context.model.actions[action.name](params)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### 3.8 ServerAction Popconfirm Renderer
+
+```typescript
+export class ServerActionPopconfirmRenderer extends BaseServerActionRenderer {
+  renderMode: ActionRenderMode = 'popconfirm'
+
+  render(action: ServerActionDefinition, context: ActionContext): RenderResult {
+    if (!this.resolveVisible(action, context)) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    const confirmConfig = typeof action.confirm === 'string'
+      ? { title: action.confirm }
+      : action.confirm || { title: `Are you sure to ${action.label}?` }
+
+    return {
+      type: 'Popconfirm',
+      props: {
+        title: confirmConfig.title,
+        description: confirmConfig.description,
+        okText: confirmConfig.okText || 'Yes',
+        cancelText: confirmConfig.cancelText || 'No',
+        okType: confirmConfig.okType || 'primary',
+        onConfirm: async () => {
+          await this.executeServerAction(action, context)
+        },
+        children: {
+          type: 'Button',
+          props: {
+            text: action.label,
+            icon: action.icon,
+            type: action.buttonType || 'default',
+            danger: action.danger,
+            disabled: this.resolveDisabled(action, context)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 4. ViewActionRenderer 实现
+
+### 4.1 ViewActionRenderer 接口
+
+```typescript
+export interface IViewActionRenderer {
+  /** 渲染器类型 */
+  renderMode: ActionRenderMode
+
+  /** 渲染 ViewAction */
+  render(action: ViewActionDefinition, context: ActionContext): RenderResult
+}
+```
+
+### 4.2 ViewActionRenderer 基类
+
+```typescript
+export abstract class BaseViewActionRenderer implements IViewActionRenderer {
+  abstract renderMode: ActionRenderMode
+
+  abstract render(action: ViewActionDefinition, context: ActionContext): RenderResult
+
+  /**
+   * 执行 ViewAction
+   */
+  protected async executeViewAction(
+    action: ViewActionDefinition,
+    context: ActionContext
+  ): Promise<void> {
+    try {
+      // 直接调用 handler
+      await action.handler(context)
+    } catch (error) {
+      console.error(`ViewAction "${action.name}" failed:`, error)
+      context.message?.error(`${action.label} failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * 解析 disabled 状态
+   */
+  protected resolveDisabled(action: ViewActionDefinition, context: ActionContext): boolean {
+    if (typeof action.disabled === 'function') {
+      return action.disabled(context)
+    }
+    return action.disabled || false
+  }
+
+  /**
+   * 解析 visible 状态
+   */
+  protected resolveVisible(action: ViewActionDefinition, context: ActionContext): boolean {
+    if (typeof action.visible === 'function') {
+      return action.visible(context)
+    }
+    return action.visible !== false
+  }
+}
+```
+
+### 4.3 ViewAction Button Renderer
+
+```typescript
+export class ViewActionButtonRenderer extends BaseViewActionRenderer {
+  renderMode: ActionRenderMode = 'button'
+
+  render(action: ViewActionDefinition, context: ActionContext): RenderResult {
+    if (!this.resolveVisible(action, context)) {
+      return { type: 'Fragment', props: {} }
+    }
+
+    return {
+      type: 'Button',
+      props: {
+        text: action.label,
+        icon: action.icon,
+        type: action.buttonType || 'default',
+        size: action.size || 'middle',
+        danger: action.danger,
+        disabled: this.resolveDisabled(action, context),
+        className: action.className,
+        style: action.style,
+        tooltip: action.tooltip,
+        onClick: async () => {
+          await this.executeViewAction(action, context)
+        }
+      }
+    }
+  }
+}
+```
+
+### 4.4 ViewAction Menu/Dropdown/Toolbar Renderer
+
+类似于 ServerAction 的实现，但调用 `executeViewAction` 而不是 `executeServerAction`。
+
+---
+
+## 5. ActionRendererRegistry（统一注册表）
+
+```typescript
+export class ActionRendererRegistry {
+  private serverRenderers: Map<ActionRenderMode, IServerActionRenderer> = new Map()
+  private viewRenderers: Map<ActionRenderMode, IViewActionRenderer> = new Map()
+
+  constructor() {
+    this.registerDefaultRenderers()
+  }
+
+  // ============================================================================
+  // ServerAction Renderer 管理
+  // ============================================================================
+
+  registerServerRenderer(renderer: IServerActionRenderer): void {
+    this.serverRenderers.set(renderer.renderMode, renderer)
+  }
+
+  unregisterServerRenderer(mode: ActionRenderMode): void {
+    this.serverRenderers.delete(mode)
+  }
+
+  getServerRenderer(mode: ActionRenderMode): IServerActionRenderer | undefined {
+    return this.serverRenderers.get(mode)
+  }
+
+  // ============================================================================
+  // ViewAction Renderer 管理
+  // ============================================================================
+
+  registerViewRenderer(renderer: IViewActionRenderer): void {
+    this.viewRenderers.set(renderer.renderMode, renderer)
+  }
+
+  unregisterViewRenderer(mode: ActionRenderMode): void {
+    this.viewRenderers.delete(mode)
+  }
+
+  getViewRenderer(mode: ActionRenderMode): IViewActionRenderer | undefined {
+    return this.viewRenderers.get(mode)
+  }
+
+  // ============================================================================
+  // 渲染方法
+  // ============================================================================
+
+  /**
+   * 渲染单个 Action
+   */
+  render(action: ActionDefinition, context: ActionContext): RenderResult {
+    const renderMode = action.renderAs || 'button'
+
+    // 根据 action.type 选择对应的 Renderer
+    if (action.type === 'server') {
+      const renderer = this.getServerRenderer(renderMode)
+      if (!renderer) {
+        throw new Error(`No ServerAction renderer found for mode "${renderMode}"`)
+      }
+      return renderer.render(action, context)
+    } else {
+      const renderer = this.getViewRenderer(renderMode)
+      if (!renderer) {
+        throw new Error(`No ViewAction renderer found for mode "${renderMode}"`)
+      }
+      return renderer.render(action, context)
+    }
+  }
+
+  /**
+   * 渲染多个 Actions（Toolbar/Dropdown）
+   */
+  renderBatch(
+    actions: ActionDefinition[],
+    context: ActionContext,
+    mode: 'toolbar' | 'dropdown' = 'toolbar'
+  ): RenderResult {
+    // 分组：ServerActions 和 ViewActions
+    const serverActions = actions.filter(a => a.type === 'server') as ServerActionDefinition[]
+    const viewActions = actions.filter(a => a.type === 'view') as ViewActionDefinition[]
+
+    if (mode === 'toolbar') {
+      // Toolbar 模式：混合渲染
+      const serverRenderer = this.getServerRenderer('toolbar')
+      const viewRenderer = this.getViewRenderer('toolbar')
+
+      return {
+        type: 'Toolbar',
+        props: {
+          left: {
+            type: 'Space',
+            children: [
+              serverRenderer?.render(serverActions, context),
+              viewRenderer?.render(viewActions, context)
+            ].filter(Boolean)
+          }
+        }
+      }
+    } else {
+      // Dropdown 模式
+      const serverRenderer = this.getServerRenderer('dropdown')
+      const viewRenderer = this.getViewRenderer('dropdown')
+
+      return {
+        type: 'Dropdown',
+        props: {
+          menu: {
+            items: [
+              ...(serverRenderer ? [serverRenderer.render(serverActions, context)] : []),
+              ...(viewRenderer ? [viewRenderer.render(viewActions, context)] : [])
+            ]
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  // 注册默认 Renderers
+  // ============================================================================
+
+  private registerDefaultRenderers(): void {
+    // ServerAction Renderers
+    this.registerServerRenderer(new ServerActionButtonRenderer())
+    this.registerServerRenderer(new ServerActionMenuRenderer())
+    this.registerServerRenderer(new ServerActionDropdownRenderer())
+    this.registerServerRenderer(new ServerActionToolbarRenderer())
+    this.registerServerRenderer(new ServerActionModalRenderer())
+    this.registerServerRenderer(new ServerActionPopconfirmRenderer())
+
+    // ViewAction Renderers
+    this.registerViewRenderer(new ViewActionButtonRenderer())
+    this.registerViewRenderer(new ViewActionMenuRenderer())
+    this.registerViewRenderer(new ViewActionDropdownRenderer())
+    this.registerViewRenderer(new ViewActionToolbarRenderer())
+  }
+}
+```
+
+---
+
+## 6. 使用示例
+
+### 6.1 ServerAction 示例
+
+```typescript
+// Model 定义
+const UserModel = defineModel({
+  name: 'User',
+  schema: UserSchema,
+
+  actions: (context) => ({
+    // ServerAction: 激活用户
+    activate: async ({ id }) => {
+      await context.repository.updateOne(id, { status: 'active' })
+      return { id, status: 'active' }
+    },
+
+    // ServerAction: 批量删除
+    batchDelete: async ({ ids }) => {
+      await context.repository.deleteMany(ids)
+      return { deletedCount: ids.length }
+    }
+  })
+})
+
+// View 中使用
+const listView = {
+  type: 'list',
+  actions: [
+    // ServerAction: 激活（按钮）
+    {
+      type: 'server',
+      name: 'activate',
+      label: 'Activate',
+      icon: 'check',
+      buttonType: 'primary',
+      confirm: 'Are you sure to activate this user?',
+      successMessage: (result) => `User ${result.id} activated!`,
+      getParams: (context) => ({ id: context.record.id })
+    },
+
+    // ServerAction: 删除（Popconfirm）
+    {
+      type: 'server',
+      name: 'delete',
+      label: 'Delete',
+      icon: 'delete',
+      danger: true,
+      renderAs: 'popconfirm',
+      confirm: {
+        title: 'Delete User',
+        description: 'This action cannot be undone.',
+        okText: 'Delete',
+        cancelText: 'Cancel'
+      },
+      getParams: (context) => ({ id: context.record.id })
+    }
+  ],
+
+  // Toolbar Actions
+  toolbarActions: [
+    // ServerAction: 批量删除
+    {
+      type: 'server',
+      name: 'batchDelete',
+      label: 'Batch Delete',
+      icon: 'delete',
+      danger: true,
+      disabled: (context) => !context.selectedIds || context.selectedIds.length === 0,
+      confirm: 'Are you sure to delete selected users?',
+      getParams: (context) => ({ ids: context.selectedIds })
+    }
+  ]
+}
+```
+
+### 6.2 ViewAction 示例
+
+```typescript
+const listView = {
+  type: 'list',
+  actions: [
+    // ViewAction: 打开创建表单
+    {
+      type: 'view',
+      name: 'openCreateModal',
+      label: 'Create User',
+      icon: 'plus',
+      buttonType: 'primary',
+      handler: (context) => {
+        context.modal.open({
+          title: 'Create New User',
+          content: {
+            type: 'form',
+            fields: ['name', 'email', 'status']
+          },
+          onOk: async (formData) => {
+            // 这里可以调用 ServerAction
+            await context.model.actions.create(formData)
+          }
+        })
+      }
+    },
+
+    // ViewAction: 导航到详情页
+    {
+      type: 'view',
+      name: 'goToDetail',
+      label: 'View Details',
+      icon: 'eye',
+      handler: (context) => {
+        context.navigate(`/users/${context.record.id}`)
+      }
+    },
+
+    // ViewAction: 刷新列表
+    {
+      type: 'view',
+      name: 'refresh',
+      label: 'Refresh',
+      icon: 'reload',
+      handler: async (context) => {
+        await context.store?.loadList()
+        context.message.success('List refreshed')
+      }
+    },
+
+    // ViewAction: 导出（前端）
+    {
+      type: 'view',
+      name: 'export',
+      label: 'Export',
+      icon: 'download',
+      handler: (context) => {
+        const csv = convertToCSV(context.records)
+        downloadFile(csv, 'users.csv')
+        context.message.success('Exported successfully')
+      }
+    }
+  ]
+}
+```
+
+### 6.3 混合使用
+
+```typescript
+const listView = {
+  type: 'list',
+
+  // Toolbar: 混合 ServerActions 和 ViewActions
+  toolbarActions: [
+    // ServerAction
+    { type: 'server', name: 'create', label: 'Create', buttonType: 'primary' },
+
+    // ViewAction
+    { type: 'view', name: 'refresh', label: 'Refresh', icon: 'reload' },
+
+    // ViewAction
+    { type: 'view', name: 'export', label: 'Export', icon: 'download' }
+  ],
+
+  // Row Actions: 混合
+  rowActions: [
+    // ViewAction
+    { type: 'view', name: 'viewDetail', label: 'View' },
+
+    // ViewAction
+    { type: 'view', name: 'edit', label: 'Edit' },
+
+    // ServerAction
+    { type: 'server', name: 'delete', label: 'Delete', danger: true, confirm: true }
+  ]
+}
+
+// 渲染
+const registry = new ActionRendererRegistry()
+
+// 渲染 Toolbar
+const toolbarResult = registry.renderBatch(
+  listView.toolbarActions,
+  context,
+  'toolbar'
+)
+
+// 渲染 Row Actions（Dropdown）
+const rowActionsResult = registry.renderBatch(
+  listView.rowActions,
+  { ...context, record: user },
+  'dropdown'
+)
+```
+
+---
+
+## 7. 架构总结
+
+### 7.1 核心改进
+
+1. **清晰的分类**
+   - `ServerAction` - 调用 Model Actions，执行业务逻辑
+   - `ViewAction` - 纯前端交互，UI 状态变更
+
+2. **统一的渲染模式**
+   - 两类 Action 都支持相同的渲染模式（button、menu、dropdown、toolbar 等）
+   - 用户可以自由选择按钮类型（primary、default、link、text 等）
+
+3. **职责分离**
+   - `ServerActionRenderer` - 处理服务端调用、loading、错误处理
+   - `ViewActionRenderer` - 处理纯前端逻辑
+
+4. **灵活的配置**
+   - 支持 disabled/visible 条件判断
+   - 支持确认提示
+   - 支持成功/失败回调
+   - 支持参数动态获取
+
+### 7.2 使用场景对比
+
+| 场景 | ActionType | 特点 |
+|-----|-----------|------|
+| 创建记录 | ServerAction | 调用后端 API，有 loading |
+| 更新记录 | ServerAction | 调用后端 API，需要确认 |
+| 删除记录 | ServerAction | 调用后端 API，危险操作 |
+| 打开 Modal | ViewAction | 纯前端，即时响应 |
+| 导航跳转 | ViewAction | 纯前端，路由变更 |
+| 刷新列表 | ViewAction | 触发 Store 重新加载 |
+| 前端导出 | ViewAction | 纯前端，数据转换 |
+
+### 7.3 优势
+
+✅ **类型清晰** - 明确区分服务端操作和视图操作
+✅ **易于理解** - 开发者一眼就能看出 Action 的性质
+✅ **统一渲染** - 两类 Action 使用相同的渲染模式
+✅ **高度灵活** - 支持各种按钮类型和渲染方式
+✅ **错误处理** - ServerAction 自动处理 loading 和错误
+✅ **类型安全** - 完整的 TypeScript 类型支持

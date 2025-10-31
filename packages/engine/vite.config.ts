@@ -16,7 +16,22 @@ export default defineConfig({
       fileName: (format) => `index.${format === 'es' ? 'js' : 'cjs'}`,
     },
     rollupOptions: {
-      external: [],
+      external: [
+        'mobx',
+        'inversify',
+        'eventemitter3',
+        'reflect-metadata',
+        'axios',
+        '@schema-component/schema'
+      ],
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
     },
   },
 });
