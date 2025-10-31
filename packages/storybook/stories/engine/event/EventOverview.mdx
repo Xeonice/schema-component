@@ -1,0 +1,227 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Event/Overview" />
+
+# Event Module
+
+The Event module provides a powerful event-driven architecture for decoupling components and implementing reactive patterns in your application.
+
+## Event-Driven Architecture Benefits
+
+Event-driven architecture offers several key advantages:
+
+### 1. Loose Coupling
+Components communicate through events rather than direct dependencies, making your code more modular and maintainable.
+
+```typescript
+// Publisher doesn't know about subscribers
+eventBus.publish({
+  type: 'user:created',
+  payload: { id: 1, name: 'Alice' },
+  timestamp: Date.now()
+})
+
+// Subscribers can be added/removed independently
+eventBus.subscribe('user:created', (event) => {
+  console.log('New user:', event.payload.name)
+})
+```
+
+### 2. Scalability
+Adding new features becomes easier as you can simply subscribe to existing events without modifying core logic.
+
+```typescript
+// Add email notification without touching user creation code
+eventBus.subscribe('user:created', sendWelcomeEmail)
+
+// Add analytics tracking independently
+eventBus.subscribe('user:created', trackUserSignup)
+```
+
+### 3. Reactivity
+Automatically respond to changes in your application state or lifecycle events.
+
+```typescript
+// React to model lifecycle events
+eventBus.subscribe(EventType.MODEL_AFTER_UPDATE, (event) => {
+  console.log('Model updated:', event.payload)
+  syncToBackend(event.payload)
+})
+```
+
+## EventBus Features
+
+The EventBus is built on [EventEmitter3](https://github.com/primus/eventemitter3) and provides:
+
+### Core Functionality
+- **Publish/Subscribe Pattern**: Decouple event producers from consumers
+- **Type-Safe Events**: Full TypeScript support with generic event types
+- **Multiple Subscribers**: Any number of handlers can subscribe to the same event
+- **Unsubscribe**: Clean up handlers when no longer needed
+- **Once Subscriptions**: Subscribe to an event only once
+
+### Advanced Features
+- **Wildcard Support**: Subscribe to multiple events with patterns (via EventEmitter3)
+- **Event Priority**: Control handler execution order (via EventEmitter3)
+- **Listener Count**: Check how many handlers are subscribed
+- **Clear All**: Remove all event handlers at once
+
+## Event Types
+
+The engine provides predefined event types for common scenarios:
+
+### Model Events
+Lifecycle events for CRUD operations:
+- `MODEL_BEFORE_CREATE` - Before creating a model instance
+- `MODEL_AFTER_CREATE` - After creating a model instance
+- `MODEL_BEFORE_UPDATE` - Before updating a model instance
+- `MODEL_AFTER_UPDATE` - After updating a model instance
+- `MODEL_BEFORE_DELETE` - Before deleting a model instance
+- `MODEL_AFTER_DELETE` - After deleting a model instance
+- `MODEL_BEFORE_READ` - Before reading model data
+- `MODEL_AFTER_READ` - After reading model data
+
+### View Events
+Component lifecycle events:
+- `VIEW_MOUNTED` - When a view component is mounted
+- `VIEW_UNMOUNTED` - When a view component is unmounted
+- `VIEW_UPDATED` - When a view component is updated
+- `VIEW_RENDERED` - When a view component is rendered
+
+### Action Events
+Action execution events:
+- `ACTION_BEFORE_EXECUTE` - Before an action executes
+- `ACTION_EXECUTED` - After an action executes successfully
+- `ACTION_FAILED` - When an action fails
+
+### State Events
+State management events:
+- `STATE_CHANGED` - When application state changes
+- `STATE_INITIALIZED` - When state is initialized
+- `STATE_RESET` - When state is reset
+
+### Custom Events
+You can also use custom event types as strings:
+```typescript
+eventBus.publish({
+  type: 'order:shipped',
+  payload: { orderId: 123, trackingNumber: 'ABC123' },
+  timestamp: Date.now()
+})
+```
+
+## Pub/Sub Pattern
+
+The Publish/Subscribe pattern is the core of the event system:
+
+### Publishers
+Components that emit events don't need to know about subscribers:
+```typescript
+// In your Model hook
+async afterCreate(data) {
+  eventBus.publish({
+    type: EventType.MODEL_AFTER_CREATE,
+    payload: data,
+    timestamp: Date.now()
+  })
+  return data
+}
+```
+
+### Subscribers
+Components subscribe to events they're interested in:
+```typescript
+// In your notification service
+eventBus.subscribe(EventType.MODEL_AFTER_CREATE, async (event) => {
+  await sendNotification(event.payload)
+})
+
+// In your analytics service
+eventBus.subscribe(EventType.MODEL_AFTER_CREATE, async (event) => {
+  await trackEvent('model_created', event.payload)
+})
+```
+
+### Benefits
+1. **Decoupling**: Publishers and subscribers are independent
+2. **Flexibility**: Add/remove subscribers without affecting publishers
+3. **Testability**: Easy to test components in isolation
+4. **Maintainability**: Clear separation of concerns
+
+## Getting Started
+
+Check out the interactive stories to see the EventBus in action:
+- [EventBus Stories](./?path=/story/engine-event-eventbus--basic-subscribe-and-publish)
+
+## API Reference
+
+### Creating EventBus
+```typescript
+import { createEventBus, getEventBus } from '@schema-component/engine'
+
+// Create a new instance
+const eventBus = createEventBus()
+
+// Or get the global singleton
+const globalBus = getEventBus()
+```
+
+### Publishing Events
+```typescript
+eventBus.publish({
+  type: 'event:type',
+  payload: { /* your data */ },
+  timestamp: Date.now(),
+  source: 'optional-source',
+  metadata: { /* optional metadata */ }
+})
+```
+
+### Subscribing to Events
+```typescript
+// Subscribe
+const unsubscribe = eventBus.subscribe('event:type', (event) => {
+  console.log(event.payload)
+})
+
+// Unsubscribe
+unsubscribe()
+
+// Subscribe once
+eventBus.subscribeOnce('event:type', (event) => {
+  console.log('This will only fire once')
+})
+```
+
+### Managing Subscriptions
+```typescript
+// Check listener count
+const count = eventBus.listenerCount('event:type')
+
+// Check if has listeners
+const hasListeners = eventBus.hasListeners('event:type')
+
+// Remove all listeners for a type
+eventBus.unsubscribe('event:type')
+
+// Clear all listeners
+eventBus.clear()
+```
+
+## Best Practices
+
+1. **Use EventType enum** for predefined events to avoid typos
+2. **Include timestamps** in your events for debugging and ordering
+3. **Clean up subscriptions** when components unmount to prevent memory leaks
+4. **Keep handlers focused** - each handler should do one thing well
+5. **Use async handlers carefully** - event order may not be guaranteed
+6. **Consider event payload size** - avoid sending large objects
+7. **Document custom event types** - make it clear what events your system emits
+
+## Examples
+
+See the [Event-Driven Example](/packages/engine/examples/event-driven.ts) for a complete working example demonstrating:
+- Model lifecycle events
+- Custom events
+- Multiple subscribers
+- Event-driven workflows

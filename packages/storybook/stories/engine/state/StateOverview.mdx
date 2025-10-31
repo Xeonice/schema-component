@@ -1,0 +1,378 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/State/Overview" />
+
+# State Module
+
+The State module provides reactive state management for Models using MobX observables. It enables automatic UI updates, computed properties, and seamless integration with Repository operations.
+
+## MobX Integration
+
+The State module is built on [MobX](https://mobx.js.org/), a battle-tested reactive state management library that makes state management simple and scalable.
+
+### Why MobX?
+
+1. **Automatic Reactivity**: UI automatically updates when state changes
+2. **Minimal Boilerplate**: No need to write action creators or reducers
+3. **Computed Values**: Derive values automatically from state
+4. **Performance**: Only re-renders what actually changed
+5. **Developer Experience**: Easy to learn and debug
+
+```typescript
+import { ModelStore } from '@schema-component/engine'
+
+// Create a store
+const store = new ModelStore({
+  modelName: 'User',
+  repository: myRepository
+})
+
+// Observable state - UI automatically updates when these change
+console.log(store.records)     // []
+console.log(store.isLoading)   // false
+console.log(store.hasData)     // false
+
+// Perform an action
+await store.loadList()
+
+// State automatically updated
+console.log(store.records)     // [{ id: 1, name: 'Alice' }, ...]
+console.log(store.hasData)     // true
+```
+
+## ModelStore Features
+
+The ModelStore class provides comprehensive state management for your Models:
+
+### Observable State
+All state properties are MobX observables that trigger automatic updates:
+- `records` - Array of loaded records
+- `current` - Currently selected/loaded record
+- `total` - Total count of records (for pagination)
+- `page` - Current page number
+- `pageSize` - Records per page
+- `loadingState` - Current loading state ('idle' | 'pending' | 'success' | 'error')
+- `error` - Error object from failed operations
+
+### Computed Properties
+Derived values automatically update when dependencies change:
+- `isLoading` - True when loadingState is 'pending'
+- `hasError` - True when there's an error
+- `hasData` - True when records array is not empty
+- `totalPages` - Calculated total pages based on total/pageSize
+
+### CRUD Actions
+All actions are MobX actions that maintain consistency:
+- `loadList(params?)` - Load paginated list of records
+- `loadOne(id)` - Load a single record by ID
+- `create(data)` - Create a new record
+- `update(id, data)` - Update an existing record
+- `delete(id)` - Delete a record
+
+### State Management
+- `setCurrent(record)` - Set the current selected record
+- `setPage(page)` - Change the current page
+- `setPageSize(size)` - Change page size
+- `reset()` - Reset all state to initial values
+- `clearError()` - Clear error state
+
+## Reactive State Management
+
+MobX makes state management predictable and automatic:
+
+### Observable State
+```typescript
+import { ModelStore } from '@schema-component/engine'
+
+const store = new ModelStore({
+  modelName: 'Product',
+  repository: productRepository
+})
+
+// All these properties are observable
+store.records        // Observable array
+store.current        // Observable value
+store.loadingState   // Observable value
+```
+
+### Computed Properties
+```typescript
+// Computed properties automatically recalculate
+console.log(store.hasData)     // false (records.length === 0)
+
+await store.loadList()
+
+console.log(store.hasData)     // true (records.length > 0)
+console.log(store.totalPages)  // Auto-calculated: Math.ceil(total / pageSize)
+```
+
+### Automatic Reactions
+In React components, use `observer` to automatically re-render:
+```typescript
+import { observer } from 'mobx-react-lite'
+
+const ProductList = observer(() => {
+  const { store } = useModel('Product')
+
+  return (
+    <div>
+      {store.isLoading && <Spinner />}
+      {store.hasError && <Error message={store.error.message} />}
+      {store.records.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  )
+})
+```
+
+## Observable Patterns
+
+### 1. Observable Arrays
+The `records` array is observable, so any mutations trigger updates:
+```typescript
+// Adding items
+await store.create({ name: 'New Product' })
+// Records array automatically includes the new item
+
+// Updating items
+await store.update(productId, { price: 29.99 })
+// Records array automatically reflects the update
+
+// Deleting items
+await store.delete(productId)
+// Records array automatically removes the item
+```
+
+### 2. Observable Objects
+Individual records are observable when needed:
+```typescript
+// Setting current record
+store.setCurrent(product)
+
+// Updates to current are observable
+await store.update(product.id, { stock: 50 })
+// store.current automatically updated
+```
+
+### 3. Observable Primitives
+Simple values are also observable:
+```typescript
+// Page changes
+store.setPage(2)  // Automatically triggers UI update
+
+// Loading state
+await store.loadList()  // loadingState changes: idle -> pending -> success
+```
+
+## Computed Properties
+
+Computed properties derive values from observable state:
+
+### Built-in Computed Properties
+```typescript
+// isLoading - computed from loadingState
+get isLoading(): boolean {
+  return this.loadingState === 'pending'
+}
+
+// hasData - computed from records
+get hasData(): boolean {
+  return this.records.length > 0
+}
+
+// totalPages - computed from total and pageSize
+get totalPages(): number {
+  return Math.ceil(this.total / this.pageSize)
+}
+```
+
+### Benefits of Computed Properties
+1. **Automatic Updates**: Recalculate when dependencies change
+2. **Caching**: Only recalculate when dependencies actually change
+3. **No Redundant State**: Derive instead of storing duplicate data
+4. **Type Safety**: Full TypeScript support
+
+## Integration with Repository
+
+ModelStore seamlessly integrates with the Repository layer:
+
+### Repository Operations
+```typescript
+// Store wraps repository calls with state management
+await store.loadList()
+// Internally calls: repository.getList()
+// Updates: records, total, page, loadingState
+
+await store.create(data)
+// Internally calls: repository.createOne(data)
+// Updates: records (adds item), total, loadingState
+
+await store.update(id, data)
+// Internally calls: repository.updateOne(id, data)
+// Updates: records (updates item), current (if matched), loadingState
+
+await store.delete(id)
+// Internally calls: repository.deleteOne(id)
+// Updates: records (removes item), total, current (clears if matched)
+```
+
+### Automatic State Synchronization
+The store keeps its state synchronized with repository data:
+```typescript
+// Initial state
+console.log(store.records)  // []
+console.log(store.total)    // 0
+
+// Load from repository
+await store.loadList()
+console.log(store.records)  // [{ id: 1, ... }, { id: 2, ... }]
+console.log(store.total)    // 2
+
+// Create via repository
+await store.create({ name: 'New Item' })
+console.log(store.records)  // [{ id: 1, ... }, { id: 2, ... }, { id: 3, ... }]
+console.log(store.total)    // 3
+```
+
+## Batch Operations
+
+Perform multiple operations efficiently:
+
+```typescript
+// Batch create
+const newItems = await Promise.all([
+  store.create({ name: 'Item 1' }),
+  store.create({ name: 'Item 2' }),
+  store.create({ name: 'Item 3' })
+])
+
+// Batch update
+const updates = store.records.map(item =>
+  store.update(item.id, { status: 'active' })
+)
+await Promise.all(updates)
+
+// Batch delete
+const deletions = selectedIds.map(id => store.delete(id))
+await Promise.all(deletions)
+```
+
+## Optimistic Updates
+
+Update UI immediately, sync with server in background:
+
+```typescript
+// Optimistic update pattern
+const optimisticUpdate = async (id: number, data: any) => {
+  // 1. Update local state immediately
+  const original = store.current
+  store.setCurrent({ ...original, ...data })
+
+  try {
+    // 2. Sync with server
+    await store.update(id, data)
+  } catch (error) {
+    // 3. Rollback on error
+    store.setCurrent(original)
+    store.error = error
+  }
+}
+```
+
+## Error Handling
+
+Comprehensive error handling with state tracking:
+
+```typescript
+try {
+  await store.loadList()
+} catch (error) {
+  // Error automatically stored in store.error
+  console.log(store.hasError)  // true
+  console.log(store.error)     // Error object
+  console.log(store.loadingState)  // 'error'
+}
+
+// Clear error when ready
+store.clearError()
+console.log(store.hasError)  // false
+console.log(store.loadingState)  // 'idle'
+```
+
+## Integration with Events
+
+Combine ModelStore with EventBus for powerful patterns:
+
+```typescript
+import { defineModel } from '@schema-component/engine'
+
+const UserModel = defineModel({
+  name: 'User',
+  schema: UserSchema,
+  repository: { type: 'mock' },
+  store: true,
+
+  actions: (context) => ({
+    activate: async ({ id }) => {
+      const store = context.store
+
+      // Update via store
+      await store.update(id, { isActive: true })
+
+      // Publish event
+      context.eventBus.publish({
+        type: 'user:activated',
+        payload: { userId: id },
+        timestamp: Date.now()
+      })
+    }
+  })
+})
+
+// Subscribe to events
+UserModel.context.eventBus.subscribe('user:activated', (event) => {
+  console.log('User activated:', event.payload.userId)
+  // Perform side effects
+})
+```
+
+## Configuration Options
+
+Customize ModelStore behavior:
+
+```typescript
+import { createModelStore } from '@schema-component/engine'
+
+const store = createModelStore({
+  // Required
+  modelName: 'Product',
+  repository: productRepository,
+
+  // Optional
+  autoLoad: true,           // Auto-load data on creation
+  defaultPageSize: 50       // Default page size
+})
+```
+
+## Getting Started
+
+Check out the interactive stories to see ModelStore in action:
+- [ModelStore Stories](./?path=/story/engine-state-modelstore--create-model-store)
+
+## Best Practices
+
+1. **Use Computed Properties**: Derive values instead of storing duplicate state
+2. **Batch Operations**: Use Promise.all() for multiple async operations
+3. **Error Handling**: Always handle errors from async operations
+4. **Clean Up**: Reset store state when unmounting components
+5. **Type Safety**: Use TypeScript generics for type-safe stores
+6. **Observable Reactions**: Use MobX `autorun` or `reaction` for side effects
+7. **Avoid Direct Mutations**: Use store actions to modify state
+8. **Integration**: Combine with EventBus for decoupled communication
+
+## Examples
+
+See the example files for complete working examples:
+- [Basic Store Usage](/packages/engine/examples/state/store-basic.ts)
+- [Model with Store](/packages/engine/examples/state/model-with-store.ts)

@@ -1,0 +1,262 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/HTTP/Overview" />
+
+# HTTP Module
+
+The HTTP module provides a powerful, flexible HTTP client layer with advanced features including interceptors, retry logic, and timeout control.
+
+## Features
+
+### HttpClient
+
+The `HttpClient` is a wrapper around axios that provides:
+
+- **Type-safe API**: Fully typed requests and responses
+- **Request/Response Interceptors**: Transform requests and responses
+- **Error Handling**: Unified error handling with detailed error information
+- **Timeout Control**: Configure timeouts per request or globally
+- **Retry Logic**: Automatic retry on failure (via interceptors)
+- **Base URL Support**: Set a base URL for all requests
+
+### RestClient
+
+The `RestClient` provides a resource-oriented API wrapper:
+
+- **CRUD Operations**: Standard create, read, update, delete operations
+- **Batch Operations**: Create, update, or delete multiple records at once
+- **Pagination Support**: Built-in pagination parameters
+- **Sorting**: Sort results by field and order
+- **Filtering**: Apply filters to list queries
+- **Query Parameters**: Flexible query parameter handling
+
+## Architecture
+
+```
+HttpClient (Low-level HTTP operations)
+    ↓
+RestClient (High-level REST API operations)
+    ↓
+Repository (Data access layer)
+```
+
+## Basic Usage
+
+### Creating an HTTP Client
+
+```typescript
+import { createHttpClient } from '@schema-component/engine'
+
+const httpClient = createHttpClient({
+  baseURL: 'https://api.example.com',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+```
+
+### Using Request/Response Interceptors
+
+```typescript
+// Request interceptor - add auth token
+httpClient.addRequestInterceptor((config) => {
+  config.headers = config.headers || {}
+  config.headers['Authorization'] = `Bearer ${token}`
+  return config
+})
+
+// Response interceptor - handle errors
+httpClient.addResponseInterceptor(
+  (response) => {
+    console.log('Response received:', response.status)
+    return response
+  },
+  (error) => {
+    console.error('Request failed:', error.message)
+    throw error
+  }
+)
+```
+
+### Making HTTP Requests
+
+```typescript
+// GET request
+const response = await httpClient.get('/users')
+console.log(response.data)
+
+// POST request
+const user = await httpClient.post('/users', {
+  name: 'John Doe',
+  email: 'john@example.com'
+})
+
+// PUT request
+await httpClient.put('/users/1', {
+  name: 'Jane Doe'
+})
+
+// DELETE request
+await httpClient.delete('/users/1')
+```
+
+### Creating a REST Client
+
+```typescript
+import { createRestClient } from '@schema-component/engine'
+
+const postsClient = createRestClient({
+  httpClient,
+  resourcePath: '/posts'
+})
+```
+
+### CRUD Operations
+
+```typescript
+// Get list with pagination
+const result = await postsClient.getList({
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', order: 'DESC' }],
+  filter: { status: 'published' }
+})
+
+// Get single record
+const post = await postsClient.getOne(1)
+
+// Create record
+const newPost = await postsClient.createOne({
+  title: 'New Post',
+  content: 'Post content'
+})
+
+// Update record
+await postsClient.updateOne(1, {
+  title: 'Updated Title'
+})
+
+// Partial update (PATCH)
+await postsClient.patchOne(1, {
+  status: 'draft'
+})
+
+// Delete record
+await postsClient.deleteOne(1)
+```
+
+### Batch Operations
+
+```typescript
+// Get multiple records
+const posts = await postsClient.getMany([1, 2, 3])
+
+// Create multiple records
+const newPosts = await postsClient.createMany([
+  { title: 'Post 1', content: 'Content 1' },
+  { title: 'Post 2', content: 'Content 2' }
+])
+
+// Delete multiple records
+await postsClient.deleteMany([1, 2, 3])
+```
+
+## Error Handling
+
+The HTTP module provides detailed error information:
+
+```typescript
+try {
+  await httpClient.get('/not-found')
+} catch (error) {
+  console.log('Message:', error.message)
+  console.log('Is network error:', error.isNetworkError)
+  console.log('Is timeout:', error.isTimeout)
+
+  if (error.response) {
+    console.log('Status:', error.response.status)
+    console.log('Data:', error.response.data)
+  }
+}
+```
+
+## Timeout Control
+
+Configure timeouts globally or per request:
+
+```typescript
+// Global timeout
+const client = createHttpClient({
+  timeout: 5000 // 5 seconds
+})
+
+// Per-request timeout
+await client.get('/slow-endpoint', {
+  timeout: 30000 // 30 seconds
+})
+```
+
+## Retry Logic
+
+Implement retry logic using response interceptors:
+
+```typescript
+let retryCount = 0
+const maxRetries = 3
+
+httpClient.addResponseInterceptor(
+  (response) => response,
+  async (error) => {
+    if (retryCount < maxRetries && error.response?.status >= 500) {
+      retryCount++
+      console.log(`Retry attempt ${retryCount}/${maxRetries}`)
+
+      // Exponential backoff
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.pow(2, retryCount) * 1000)
+      )
+
+      // Retry the request
+      return httpClient.request(error.config)
+    }
+
+    throw error
+  }
+)
+```
+
+## Integration with Repository
+
+The HTTP module integrates seamlessly with the Repository layer:
+
+```typescript
+import { createHttpRepository } from '@schema-component/engine'
+
+const userRepository = createHttpRepository({
+  modelName: 'User',
+  httpClient,
+  resourcePath: '/users'
+})
+
+// Now use with ModelStore
+const userStore = createModelStore({
+  modelName: 'User',
+  repository: userRepository
+})
+```
+
+## Best Practices
+
+1. **Use RestClient for standard REST APIs**: It provides a cleaner, more maintainable API
+2. **Use HttpClient for custom endpoints**: When you need full control over requests
+3. **Add authentication in interceptors**: Keep auth logic centralized
+4. **Handle errors gracefully**: Use response interceptors for global error handling
+5. **Set appropriate timeouts**: Prevent hanging requests
+6. **Use TypeScript generics**: Get type-safe responses
+
+## Examples
+
+See the interactive stories for detailed examples:
+
+- **HttpClient Stories**: Basic HTTP operations with interceptors and error handling
+- **RestClient Stories**: CRUD operations and batch processing

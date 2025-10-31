@@ -1,0 +1,1205 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Docs/Render Architecture" />
+
+# Render 层架构设计（最终版）
+
+## 架构原则
+
+### 分层职责
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Framework Layer (React/Vue/...)                        │
+│  - 具体的 UI 组件实现                                    │
+│  - 具体的 Renderer 实现                                  │
+│  - 框架特定的状态绑定                                    │
+└─────────────────────────────────────────────────────────┘
+                          ↑
+                          │ 实现接口
+                          │
+┌─────────────────────────────────────────────────────────┐
+│  Engine Layer (@schema-component/engine)                │
+│  - Renderer 接口定义                                     │
+│  - 状态管理（ViewStack、ActionQueue）                   │
+│  - Renderer 注册表                                       │
+│  - 框架无关的抽象                                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 核心理念
+
+1. **Engine 层**：只定义接口和提供状态管理，不实现具体渲染
+2. **Framework 层**：实现具体的 Renderer，使用 Engine 提供的状态
+3. **状态集中管理**：ViewStack、ActionQueue 等由 Engine 统一管理
+4. **可插拔设计**：框架层可以自由替换 Renderer 实现
+
+---
+
+## 1. Engine 层：接口定义
+
+### 1.1 Renderer 接口
+
+```typescript
+/**
+ * 渲染结果（框架无关的描述符）
+ */
+export interface RenderDescriptor {
+  /** 组件类型标识 */
+  type: string
+
+  /** 组件属性 */
+  props: Record<string, any>
+
+  /** 子元素 */
+  children?: RenderDescriptor[]
+
+  /** 唯一标识 */
+  key?: string | number
+}
+
+/**
+ * 渲染上下文
+ */
+export interface RenderContext {
+  // Model 信息
+  modelName: string
+  model: IModel
+
+  // 数据
+  record?: any
+  records?: any[]
+
+  // Engine 提供的状态管理
+  viewStack: IViewStack
+  actionQueue: IActionQueue
+
+  // UI 控制器（由框架层实现）
+  modal?: IModalController
+  drawer?: IDrawerController
+  message?: IMessageController
+  navigate?: (path: string) => void
+
+  // 其他上下文
+  [key: string]: any
+}
+
+// ============================================================================
+// DataRenderer 接口
+// ============================================================================
+
+/**
+ * 字段定义
+ */
+export interface FieldDefinition {
+  type: string
+  name: string
+  label?: string
+  required?: boolean
+  format?: string
+  [key: string]: any
+}
+
+/**
+ * DataRenderer 接口
+ * 框架层需要实现此接口
+ */
+export interface IDataRenderer {
+  /** 支持的字段类型 */
+  type: string
+
+  /** 渲染字段（展示模式） */
+  render(value: any, field: FieldDefinition, context: RenderContext): RenderDescriptor
+
+  /** 渲染字段（编辑模式） */
+  renderEdit?(value: any, field: FieldDefinition, context: RenderContext): RenderDescriptor
+
+  /** 格式化显示值 */
+  format?(value: any, field: FieldDefinition): string
+}
+
+// ============================================================================
+// ViewRenderer 接口
+// ============================================================================
+
+/**
+ * View 定义
+ */
+export interface ViewDefinition {
+  type: ViewType
+  title?: string
+  fields?: string[]
+  layout?: string
+  [key: string]: any
+}
+
+export type ViewType = 'list' | 'form' | 'detail' | 'kanban' | 'calendar' | string
+
+/**
+ * ViewRenderer 接口
+ * 框架层需要实现此接口
+ */
+export interface IViewRenderer {
+  /** 支持的视图类型 */
+  type: ViewType
+
+  /** 渲染视图 */
+  render(view: ViewDefinition, data: any, context: RenderContext): RenderDescriptor
+}
+
+// ============================================================================
+// ActionRenderer 接口
+// ============================================================================
+
+/**
+ * Action 类型
+ */
+export type ActionType = 'server' | 'view'
+
+/**
+ * Action 定义（基类）
+ */
+export interface BaseActionDefinition {
+  type: ActionType
+  name: string
+  label: string
+  icon?: string
+  buttonType?: 'primary' | 'default' | 'dashed' | 'text' | 'link'
+  disabled?: boolean | ((context: RenderContext) => boolean)
+  visible?: boolean | ((context: RenderContext) => boolean)
+  [key: string]: any
+}
+
+/**
+ * ServerAction 定义
+ */
+export interface ServerActionDefinition extends BaseActionDefinition {
+  type: 'server'
+  getParams?: (context: RenderContext) => any
+  confirm?: string | { title: string; description?: string }
+  onSuccess?: (result: any, context: RenderContext) => void
+  onError?: (error: Error, context: RenderContext) => void
+}
+
+/**
+ * ViewAction 定义
+ */
+export interface ViewActionDefinition extends BaseActionDefinition {
+  type: 'view'
+  handler: (context: RenderContext) => void | Promise<void>
+}
+
+export type ActionDefinition = ServerActionDefinition | ViewActionDefinition
+
+/**
+ * ActionRenderer 接口
+ * 框架层需要实现此接口
+ */
+export interface IActionRenderer {
+  /** 支持的渲染模式 */
+  renderMode: 'button' | 'menu' | 'dropdown' | 'toolbar'
+
+  /** 渲染 Action */
+  renderServer?(action: ServerActionDefinition, context: RenderContext): RenderDescriptor
+  renderView?(action: ViewActionDefinition, context: RenderContext): RenderDescriptor
+}
+```
+
+---
+
+## 2. Engine 层：状态管理
+
+### 2.1 ViewStack（视图栈）
+
+管理视图导航历史，支持前进/后退。
+
+```typescript
+/**
+ * 视图栈项
+ */
+export interface ViewStackItem {
+  /** 视图 ID */
+  id: string
+
+  /** 视图类型 */
+  type: ViewType
+
+  /** 视图定义 */
+  definition: ViewDefinition
+
+  /** 视图数据 */
+  data?: any
+
+  /** 视图参数 */
+  params?: Record<string, any>
+
+  /** 时间戳 */
+  timestamp: number
+}
+
+/**
+ * ViewStack 接口
+ */
+export interface IViewStack {
+  /** 当前视图 */
+  readonly current: ViewStackItem | null
+
+  /** 视图历史 */
+  readonly history: ViewStackItem[]
+
+  /** 是否可以后退 */
+  readonly canGoBack: boolean
+
+  /** 是否可以前进 */
+  readonly canGoForward: boolean
+
+  /** 压入新视图 */
+  push(view: ViewDefinition, data?: any, params?: Record<string, any>): void
+
+  /** 替换当前视图 */
+  replace(view: ViewDefinition, data?: any, params?: Record<string, any>): void
+
+  /** 后退 */
+  goBack(): ViewStackItem | null
+
+  /** 前进 */
+  goForward(): ViewStackItem | null
+
+  /** 跳转到指定索引 */
+  goTo(index: number): ViewStackItem | null
+
+  /** 清空栈 */
+  clear(): void
+
+  /** 订阅变化 */
+  subscribe(listener: (current: ViewStackItem | null) => void): () => void
+}
+
+/**
+ * ViewStack 实现（MobX）
+ */
+export class ViewStack implements IViewStack {
+  @observable
+  private stack: ViewStackItem[] = []
+
+  @observable
+  private currentIndex: number = -1
+
+  @computed
+  get current(): ViewStackItem | null {
+    return this.currentIndex >= 0 ? this.stack[this.currentIndex] : null
+  }
+
+  @computed
+  get history(): ViewStackItem[] {
+    return this.stack.slice(0, this.currentIndex + 1)
+  }
+
+  @computed
+  get canGoBack(): boolean {
+    return this.currentIndex > 0
+  }
+
+  @computed
+  get canGoForward(): boolean {
+    return this.currentIndex < this.stack.length - 1
+  }
+
+  @action
+  push(view: ViewDefinition, data?: any, params?: Record<string, any>): void {
+    const item: ViewStackItem = {
+      id: this.generateId(),
+      type: view.type,
+      definition: view,
+      data,
+      params,
+      timestamp: Date.now()
+    }
+
+    // 清除前进历史
+    if (this.currentIndex < this.stack.length - 1) {
+      this.stack = this.stack.slice(0, this.currentIndex + 1)
+    }
+
+    this.stack.push(item)
+    this.currentIndex = this.stack.length - 1
+
+    this.notifyListeners()
+  }
+
+  @action
+  replace(view: ViewDefinition, data?: any, params?: Record<string, any>): void {
+    const item: ViewStackItem = {
+      id: this.generateId(),
+      type: view.type,
+      definition: view,
+      data,
+      params,
+      timestamp: Date.now()
+    }
+
+    if (this.currentIndex >= 0) {
+      this.stack[this.currentIndex] = item
+    } else {
+      this.stack = [item]
+      this.currentIndex = 0
+    }
+
+    this.notifyListeners()
+  }
+
+  @action
+  goBack(): ViewStackItem | null {
+    if (this.canGoBack) {
+      this.currentIndex--
+      this.notifyListeners()
+      return this.current
+    }
+    return null
+  }
+
+  @action
+  goForward(): ViewStackItem | null {
+    if (this.canGoForward) {
+      this.currentIndex++
+      this.notifyListeners()
+      return this.current
+    }
+    return null
+  }
+
+  @action
+  goTo(index: number): ViewStackItem | null {
+    if (index >= 0 && index < this.stack.length) {
+      this.currentIndex = index
+      this.notifyListeners()
+      return this.current
+    }
+    return null
+  }
+
+  @action
+  clear(): void {
+    this.stack = []
+    this.currentIndex = -1
+    this.notifyListeners()
+  }
+
+  // ============================================================================
+  // 订阅机制
+  // ============================================================================
+
+  private listeners: Set<(current: ViewStackItem | null) => void> = new Set()
+
+  subscribe(listener: (current: ViewStackItem | null) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private notifyListeners(): void {
+    this.listeners.forEach(listener => listener(this.current))
+  }
+
+  private generateId(): string {
+    return `view_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+}
+```
+
+### 2.2 ActionQueue（服务端操作队列）
+
+管理 ServerAction 的执行队列，支持并发控制、重试、取消等。
+
+```typescript
+/**
+ * Action 执行状态
+ */
+export type ActionStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
+
+/**
+ * Action 任务
+ */
+export interface ActionTask {
+  /** 任务 ID */
+  id: string
+
+  /** Action 定义 */
+  action: ServerActionDefinition
+
+  /** 执行参数 */
+  params: any
+
+  /** 执行上下文 */
+  context: RenderContext
+
+  /** 任务状态 */
+  status: ActionStatus
+
+  /** 错误信息 */
+  error?: Error
+
+  /** 结果 */
+  result?: any
+
+  /** 创建时间 */
+  createdAt: number
+
+  /** 开始时间 */
+  startedAt?: number
+
+  /** 完成时间 */
+  completedAt?: number
+
+  /** 重试次数 */
+  retryCount: number
+
+  /** 最大重试次数 */
+  maxRetries: number
+}
+
+/**
+ * ActionQueue 配置
+ */
+export interface ActionQueueConfig {
+  /** 最大并发数 */
+  concurrency?: number
+
+  /** 默认重试次数 */
+  defaultMaxRetries?: number
+
+  /** 任务超时时间（毫秒） */
+  timeout?: number
+}
+
+/**
+ * ActionQueue 接口
+ */
+export interface IActionQueue {
+  /** 待执行任务 */
+  readonly pending: ActionTask[]
+
+  /** 执行中任务 */
+  readonly running: ActionTask[]
+
+  /** 已完成任务 */
+  readonly completed: ActionTask[]
+
+  /** 失败任务 */
+  readonly failed: ActionTask[]
+
+  /** 添加任务 */
+  enqueue(
+    action: ServerActionDefinition,
+    params: any,
+    context: RenderContext,
+    options?: { priority?: number; maxRetries?: number }
+  ): string
+
+  /** 取消任务 */
+  cancel(taskId: string): boolean
+
+  /** 重试任务 */
+  retry(taskId: string): boolean
+
+  /** 清空队列 */
+  clear(): void
+
+  /** 获取任务 */
+  getTask(taskId: string): ActionTask | undefined
+
+  /** 订阅任务状态变化 */
+  subscribe(
+    taskId: string,
+    listener: (task: ActionTask) => void
+  ): () => void
+
+  /** 订阅队列变化 */
+  subscribeQueue(
+    listener: (queue: IActionQueue) => void
+  ): () => void
+}
+
+/**
+ * ActionQueue 实现（MobX）
+ */
+export class ActionQueue implements IActionQueue {
+  @observable
+  private tasks: Map<string, ActionTask> = new Map()
+
+  @observable
+  private runningCount: number = 0
+
+  private config: Required<ActionQueueConfig>
+  private taskListeners: Map<string, Set<(task: ActionTask) => void>> = new Map()
+  private queueListeners: Set<(queue: IActionQueue) => void> = new Set()
+
+  constructor(config: ActionQueueConfig = {}) {
+    this.config = {
+      concurrency: config.concurrency || 3,
+      defaultMaxRetries: config.defaultMaxRetries || 0,
+      timeout: config.timeout || 30000
+    }
+
+    makeObservable(this)
+  }
+
+  @computed
+  get pending(): ActionTask[] {
+    return Array.from(this.tasks.values()).filter(t => t.status === 'pending')
+  }
+
+  @computed
+  get running(): ActionTask[] {
+    return Array.from(this.tasks.values()).filter(t => t.status === 'running')
+  }
+
+  @computed
+  get completed(): ActionTask[] {
+    return Array.from(this.tasks.values()).filter(t => t.status === 'success')
+  }
+
+  @computed
+  get failed(): ActionTask[] {
+    return Array.from(this.tasks.values()).filter(t => t.status === 'failed')
+  }
+
+  @action
+  enqueue(
+    action: ServerActionDefinition,
+    params: any,
+    context: RenderContext,
+    options?: { priority?: number; maxRetries?: number }
+  ): string {
+    const task: ActionTask = {
+      id: this.generateTaskId(),
+      action,
+      params,
+      context,
+      status: 'pending',
+      createdAt: Date.now(),
+      retryCount: 0,
+      maxRetries: options?.maxRetries ?? this.config.defaultMaxRetries
+    }
+
+    this.tasks.set(task.id, task)
+    this.notifyQueueListeners()
+
+    // 尝试执行任务
+    this.processQueue()
+
+    return task.id
+  }
+
+  @action
+  cancel(taskId: string): boolean {
+    const task = this.tasks.get(taskId)
+    if (!task) return false
+
+    if (task.status === 'pending' || task.status === 'running') {
+      task.status = 'cancelled'
+      task.completedAt = Date.now()
+      this.notifyTaskListeners(taskId, task)
+      this.notifyQueueListeners()
+      return true
+    }
+
+    return false
+  }
+
+  @action
+  retry(taskId: string): boolean {
+    const task = this.tasks.get(taskId)
+    if (!task || task.status !== 'failed') return false
+
+    task.status = 'pending'
+    task.error = undefined
+    task.retryCount++
+    this.notifyTaskListeners(taskId, task)
+    this.notifyQueueListeners()
+
+    this.processQueue()
+    return true
+  }
+
+  @action
+  clear(): void {
+    this.tasks.clear()
+    this.runningCount = 0
+    this.notifyQueueListeners()
+  }
+
+  getTask(taskId: string): ActionTask | undefined {
+    return this.tasks.get(taskId)
+  }
+
+  // ============================================================================
+  // 队列处理
+  // ============================================================================
+
+  private async processQueue(): Promise<void> {
+    // 检查并发限制
+    if (this.runningCount >= this.config.concurrency) {
+      return
+    }
+
+    // 获取下一个待执行任务
+    const nextTask = this.pending[0]
+    if (!nextTask) {
+      return
+    }
+
+    // 执行任务
+    await this.executeTask(nextTask)
+
+    // 继续处理队列
+    this.processQueue()
+  }
+
+  @action
+  private async executeTask(task: ActionTask): Promise<void> {
+    // 更新状态
+    task.status = 'running'
+    task.startedAt = Date.now()
+    this.runningCount++
+    this.notifyTaskListeners(task.id, task)
+    this.notifyQueueListeners()
+
+    try {
+      // 执行 Model Action
+      const result = await Promise.race([
+        task.context.model.actions[task.action.name](task.params),
+        this.timeout(this.config.timeout)
+      ])
+
+      runInAction(() => {
+        task.status = 'success'
+        task.result = result
+        task.completedAt = Date.now()
+        this.runningCount--
+      })
+
+      // 成功回调
+      task.action.onSuccess?.(result, task.context)
+
+    } catch (error) {
+      runInAction(() => {
+        task.error = error as Error
+        this.runningCount--
+
+        // 检查是否需要重试
+        if (task.retryCount < task.maxRetries) {
+          task.status = 'pending'
+          task.retryCount++
+        } else {
+          task.status = 'failed'
+          task.completedAt = Date.now()
+        }
+      })
+
+      // 失败回调
+      if (task.status === 'failed') {
+        task.action.onError?.(error as Error, task.context)
+      }
+    }
+
+    this.notifyTaskListeners(task.id, task)
+    this.notifyQueueListeners()
+  }
+
+  private timeout(ms: number): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Action timeout')), ms)
+    })
+  }
+
+  // ============================================================================
+  // 订阅机制
+  // ============================================================================
+
+  subscribe(
+    taskId: string,
+    listener: (task: ActionTask) => void
+  ): () => void {
+    if (!this.taskListeners.has(taskId)) {
+      this.taskListeners.set(taskId, new Set())
+    }
+    this.taskListeners.get(taskId)!.add(listener)
+
+    return () => {
+      this.taskListeners.get(taskId)?.delete(listener)
+    }
+  }
+
+  subscribeQueue(
+    listener: (queue: IActionQueue) => void
+  ): () => void {
+    this.queueListeners.add(listener)
+    return () => this.queueListeners.delete(listener)
+  }
+
+  private notifyTaskListeners(taskId: string, task: ActionTask): void {
+    this.taskListeners.get(taskId)?.forEach(listener => listener(task))
+  }
+
+  private notifyQueueListeners(): void {
+    this.queueListeners.forEach(listener => listener(this))
+  }
+
+  private generateTaskId(): string {
+    return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+}
+```
+
+### 2.3 RenderEngine（渲染引擎）
+
+统一管理 Renderer 注册和状态。
+
+```typescript
+/**
+ * RenderEngine 配置
+ */
+export interface RenderEngineConfig {
+  viewStack?: IViewStack
+  actionQueue?: IActionQueue
+  actionQueueConfig?: ActionQueueConfig
+}
+
+/**
+ * RenderEngine（单例）
+ */
+export class RenderEngine {
+  private static instance: RenderEngine
+
+  // Renderer 注册表
+  private dataRenderers: Map<string, IDataRenderer> = new Map()
+  private viewRenderers: Map<ViewType, IViewRenderer> = new Map()
+  private actionRenderers: Map<string, IActionRenderer> = new Map()
+
+  // 状态管理
+  public readonly viewStack: IViewStack
+  public readonly actionQueue: IActionQueue
+
+  private constructor(config: RenderEngineConfig = {}) {
+    this.viewStack = config.viewStack || new ViewStack()
+    this.actionQueue = config.actionQueue || new ActionQueue(config.actionQueueConfig)
+
+    makeObservable(this)
+  }
+
+  static getInstance(config?: RenderEngineConfig): RenderEngine {
+    if (!RenderEngine.instance) {
+      RenderEngine.instance = new RenderEngine(config)
+    }
+    return RenderEngine.instance
+  }
+
+  // ============================================================================
+  // Renderer 注册
+  // ============================================================================
+
+  registerDataRenderer(renderer: IDataRenderer): void {
+    this.dataRenderers.set(renderer.type, renderer)
+  }
+
+  registerViewRenderer(renderer: IViewRenderer): void {
+    this.viewRenderers.set(renderer.type, renderer)
+  }
+
+  registerActionRenderer(name: string, renderer: IActionRenderer): void {
+    this.actionRenderers.set(name, renderer)
+  }
+
+  getDataRenderer(type: string): IDataRenderer | undefined {
+    return this.dataRenderers.get(type)
+  }
+
+  getViewRenderer(type: ViewType): IViewRenderer | undefined {
+    return this.viewRenderers.get(type)
+  }
+
+  getActionRenderer(name: string): IActionRenderer | undefined {
+    return this.actionRenderers.get(name)
+  }
+
+  // ============================================================================
+  // 辅助方法
+  // ============================================================================
+
+  /**
+   * 创建渲染上下文
+   */
+  createContext(base: Partial<RenderContext>): RenderContext {
+    return {
+      modelName: base.modelName || '',
+      model: base.model!,
+      viewStack: this.viewStack,
+      actionQueue: this.actionQueue,
+      ...base
+    } as RenderContext
+  }
+
+  /**
+   * 执行 ServerAction
+   */
+  async executeServerAction(
+    action: ServerActionDefinition,
+    params: any,
+    context: RenderContext
+  ): Promise<string> {
+    return this.actionQueue.enqueue(action, params, context)
+  }
+
+  /**
+   * 执行 ViewAction
+   */
+  async executeViewAction(
+    action: ViewActionDefinition,
+    context: RenderContext
+  ): Promise<void> {
+    try {
+      await action.handler(context)
+    } catch (error) {
+      console.error(`ViewAction "${action.name}" failed:`, error)
+      throw error
+    }
+  }
+}
+```
+
+---
+
+## 3. Framework 层：实现示例
+
+### 3.1 React 实现示例
+
+```typescript
+// @schema-component/engine-react
+
+import React from 'react'
+import { observer } from 'mobx-react-lite'
+import { Button, Input, Select } from 'antd'
+import {
+  IDataRenderer,
+  IViewRenderer,
+  IActionRenderer,
+  RenderEngine,
+  FieldDefinition,
+  ViewDefinition,
+  ServerActionDefinition,
+  ViewActionDefinition,
+  RenderContext,
+  RenderDescriptor
+} from '@schema-component/engine'
+
+// ============================================================================
+// React DataRenderer 实现
+// ============================================================================
+
+export class ReactStringRenderer implements IDataRenderer {
+  type = 'string'
+
+  render(value: string, field: FieldDefinition, context: RenderContext): RenderDescriptor {
+    return {
+      type: 'Text',
+      props: { children: value }
+    }
+  }
+
+  renderEdit(value: string, field: FieldDefinition, context: RenderContext): RenderDescriptor {
+    return {
+      type: 'Input',
+      props: {
+        value,
+        placeholder: field.placeholder,
+        required: field.required
+      }
+    }
+  }
+}
+
+// ============================================================================
+// React ViewRenderer 实现
+// ============================================================================
+
+export class ReactListRenderer implements IViewRenderer {
+  type = 'list' as const
+
+  render(view: ViewDefinition, data: any, context: RenderContext): RenderDescriptor {
+    return {
+      type: 'Table',
+      props: {
+        dataSource: data,
+        columns: view.columns,
+        pagination: view.pagination
+      }
+    }
+  }
+}
+
+// ============================================================================
+// React ActionRenderer 实现
+// ============================================================================
+
+export class ReactActionButtonRenderer implements IActionRenderer {
+  renderMode = 'button' as const
+
+  renderServer(action: ServerActionDefinition, context: RenderContext): RenderDescriptor {
+    return {
+      type: 'Button',
+      props: {
+        type: action.buttonType || 'default',
+        children: action.label,
+        onClick: async () => {
+          const params = action.getParams?.(context) || {}
+          await context.actionQueue.enqueue(action, params, context)
+        }
+      }
+    }
+  }
+
+  renderView(action: ViewActionDefinition, context: RenderContext): RenderDescriptor {
+    return {
+      type: 'Button',
+      props: {
+        type: action.buttonType || 'default',
+        children: action.label,
+        onClick: () => action.handler(context)
+      }
+    }
+  }
+}
+
+// ============================================================================
+// React 组件映射
+// ============================================================================
+
+const componentMap = {
+  Text: ({ children }: any) => <span>{children}</span>,
+  Input: Input,
+  Button: Button,
+  Select: Select,
+  Table: Table,
+  // ... 更多组件
+}
+
+// ============================================================================
+// RenderDescriptor 转 React Element
+// ============================================================================
+
+export function renderDescriptor(descriptor: RenderDescriptor): React.ReactElement {
+  const Component = componentMap[descriptor.type]
+  if (!Component) {
+    console.warn(`Component "${descriptor.type}" not found`)
+    return null
+  }
+
+  const children = descriptor.children?.map((child, i) => (
+    <React.Fragment key={child.key || i}>
+      {renderDescriptor(child)}
+    </React.Fragment>
+  ))
+
+  return <Component {...descriptor.props}>{children}</Component>
+}
+
+// ============================================================================
+// React Hooks
+// ============================================================================
+
+/**
+ * 使用 ViewStack
+ */
+export function useViewStack() {
+  const engine = RenderEngine.getInstance()
+  return engine.viewStack
+}
+
+/**
+ * 使用 ActionQueue
+ */
+export function useActionQueue() {
+  const engine = RenderEngine.getInstance()
+  return engine.actionQueue
+}
+
+/**
+ * 使用当前视图
+ */
+export const useCurrentView = observer(() => {
+  const viewStack = useViewStack()
+  return viewStack.current
+})
+
+/**
+ * 监听 Action 任务状态
+ */
+export function useActionTask(taskId: string) {
+  const [task, setTask] = React.useState<ActionTask | undefined>()
+  const actionQueue = useActionQueue()
+
+  React.useEffect(() => {
+    const unsubscribe = actionQueue.subscribe(taskId, setTask)
+    return unsubscribe
+  }, [taskId, actionQueue])
+
+  return task
+}
+```
+
+### 3.2 注册 React Renderer
+
+```typescript
+// 初始化 Engine
+const engine = RenderEngine.getInstance()
+
+// 注册 DataRenderers
+engine.registerDataRenderer(new ReactStringRenderer())
+engine.registerDataRenderer(new ReactNumberRenderer())
+// ... 更多
+
+// 注册 ViewRenderers
+engine.registerViewRenderer(new ReactListRenderer())
+engine.registerViewRenderer(new ReactFormRenderer())
+// ... 更多
+
+// 注册 ActionRenderers
+engine.registerActionRenderer('button', new ReactActionButtonRenderer())
+engine.registerActionRenderer('dropdown', new ReactActionDropdownRenderer())
+// ... 更多
+```
+
+---
+
+## 4. 使用示例
+
+### 4.1 在 React 中使用 ViewStack
+
+```typescript
+import { observer } from 'mobx-react-lite'
+import { useViewStack, renderDescriptor } from '@schema-component/engine-react'
+
+const App = observer(() => {
+  const viewStack = useViewStack()
+  const engine = RenderEngine.getInstance()
+
+  // 渲染当前视图
+  const renderCurrentView = () => {
+    if (!viewStack.current) return null
+
+    const { definition, data } = viewStack.current
+    const renderer = engine.getViewRenderer(definition.type)
+    if (!renderer) return null
+
+    const context = engine.createContext({
+      modelName: 'User',
+      model: UserModel
+    })
+
+    const descriptor = renderer.render(definition, data, context)
+    return renderDescriptor(descriptor)
+  }
+
+  return (
+    <div>
+      {/* 导航按钮 */}
+      <div>
+        <button
+          disabled={!viewStack.canGoBack}
+          onClick={() => viewStack.goBack()}
+        >
+          Back
+        </button>
+        <button
+          disabled={!viewStack.canGoForward}
+          onClick={() => viewStack.goForward()}
+        >
+          Forward
+        </button>
+      </div>
+
+      {/* 当前视图 */}
+      {renderCurrentView()}
+    </div>
+  )
+})
+```
+
+### 4.2 在 React 中使用 ActionQueue
+
+```typescript
+import { observer } from 'mobx-react-lite'
+import { useActionQueue } from '@schema-component/engine-react'
+
+const ActionQueueMonitor = observer(() => {
+  const actionQueue = useActionQueue()
+
+  return (
+    <div>
+      <h3>Action Queue Status</h3>
+      <p>Pending: {actionQueue.pending.length}</p>
+      <p>Running: {actionQueue.running.length}</p>
+      <p>Completed: {actionQueue.completed.length}</p>
+      <p>Failed: {actionQueue.failed.length}</p>
+
+      <h4>Running Tasks:</h4>
+      <ul>
+        {actionQueue.running.map(task => (
+          <li key={task.id}>
+            {task.action.label}
+            <button onClick={() => actionQueue.cancel(task.id)}>
+              Cancel
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+})
+```
+
+---
+
+## 5. 架构总结
+
+### 5.1 职责划分
+
+| 层级 | 职责 | 示例 |
+|-----|------|------|
+| **Engine 层** | 接口定义、状态管理 | RenderEngine、ViewStack、ActionQueue |
+| **Framework 层** | 具体实现、UI 组件 | ReactStringRenderer、ReactListRenderer |
+| **Application 层** | 业务逻辑、Model 定义 | UserModel、定义 Actions/Views |
+
+### 5.2 核心优势
+
+- **分层清晰** - Engine 不依赖具体框架
+- **状态集中** - ViewStack/ActionQueue 统一管理
+- **可插拔** - 框架层可自由替换实现
+- **类型安全** - 完整的 TypeScript 接口
+- **响应式** - 基于 MobX 的状态管理
+- **可扩展** - 易于添加新的 Renderer
+
+### 5.3 关键特性
+
+1. **ViewStack（视图栈）**
+   - 管理视图导航历史
+   - 支持前进/后退
+   - 自动通知视图变化
+
+2. **ActionQueue（操作队列）**
+   - 管理 ServerAction 执行
+   - 支持并发控制
+   - 支持重试机制
+   - 提供实时状态
+
+3. **Renderer 注册表**
+   - 统一管理所有 Renderer
+   - 支持运行时替换
+   - 框架无关的抽象
+
+### 5.4 扩展点
+
+1. **自定义 DataRenderer** - 支持新的字段类型
+2. **自定义 ViewRenderer** - 支持新的视图类型
+3. **自定义 ActionRenderer** - 支持新的渲染模式
+4. **自定义状态管理** - 可替换 ViewStack/ActionQueue 实现
