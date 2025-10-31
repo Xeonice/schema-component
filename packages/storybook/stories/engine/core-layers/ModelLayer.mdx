@@ -1,0 +1,512 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Core Layers/Model Layer" />
+
+# Model 层（领域模型）
+
+Model 层是 Engine 的核心，基于 DDD（领域驱动设计）原则设计，类似 Odoo 的模型管理模式。**View、Action、APIs、Hooks 都在这一层统一定义**。
+
+## 核心概念
+
+Model 层作为统一定义层，提供了一站式的业务模型配置方式：
+
+- **Schema 定义** - 数据结构和字段类型
+- **Views 定义** - 视图配置（list、form、kanban 等）
+- **Actions 定义** - 业务操作（可执行函数）
+- **APIs 定义** - 数据接口（可执行函数）
+- **Hooks 定义** - 生命周期钩子
+- **Methods 定义** - 自定义业务方法
+- **Options 配置** - 模型选项
+
+## Model 定义接口
+
+```typescript
+interface ModelDefinition {
+  // 基础元数据
+  name: string
+
+  // Schema 定义（字段）
+  schema: SchemaDefinition
+
+  // 视图定义函数
+  views?: (context: ModelContext) => ViewDefinitions
+
+  // 动作定义函数
+  actions?: (context: ModelContext) => ActionDefinitions
+
+  // API 定义（可执行函数）
+  apis?: {
+    getList?: (params: GetListParams) => Promise<GetListResult>
+    getOne?: (id: string | number) => Promise<any>
+    createOne?: (data: any) => Promise<any>
+    updateOne?: (id: string | number, data: any) => Promise<any>
+    deleteOne?: (id: string | number) => Promise<boolean>
+    // 自定义 API 方法
+    [customApi: string]: ((...args: any[]) => Promise<any>) | undefined
+  }
+
+  // 生命周期钩子
+  hooks?: {
+    beforeCreate?: (data: any) => Promise<any>
+    afterCreate?: (record: any) => Promise<void>
+    beforeUpdate?: (id: string | number, data: any) => Promise<any>
+    afterUpdate?: (record: any) => Promise<void>
+    beforeDelete?: (id: string | number) => Promise<boolean>
+    afterDelete?: (id: string | number) => Promise<void>
+    beforeRead?: (id: string | number) => Promise<void>
+    afterRead?: (record: any) => Promise<any>
+    beforeSearch?: (criteria: any) => Promise<any>
+    afterSearch?: (results: any[]) => Promise<any[]>
+  }
+
+  // 自定义方法
+  methods?: {
+    [methodName: string]: (...args: any[]) => Promise<any>
+  }
+
+  // 选项配置
+  options?: {
+    tableName?: string
+    description?: string
+    timestamps?: boolean
+    softDelete?: boolean
+  }
+}
+```
+
+## Model Context
+
+Model Context 提供了模型运行时需要的上下文信息和依赖：
+
+```typescript
+interface ModelContext {
+  modelName: string
+  schema: SchemaDefinition
+  repository: IRepository
+  eventBus: EventBus
+}
+```
+
+Context 使得 Actions 和 Views 可以：
+- 访问 Repository 进行数据操作
+- 通过 EventBus 发布/订阅事件
+- 访问 Schema 信息
+- 获取模型名称
+
+## defineModel 函数
+
+`defineModel` 是创建 Model 的统一入口：
+
+```typescript
+function defineModel(definition: ModelDefinition): IModel {
+  // 创建 Model Context
+  const context: ModelContext = {
+    modelName: definition.name,
+    schema: definition.schema,
+    repository: createRepository(definition),
+    eventBus: getEventBus()
+  }
+
+  // 初始化 views（如果是函数则调用）
+  const views = typeof definition.views === 'function'
+    ? definition.views(context)
+    : definition.views || {}
+
+  // 初始化 actions（如果是函数则调用）
+  const actions = typeof definition.actions === 'function'
+    ? definition.actions(context)
+    : definition.actions || {}
+
+  return {
+    name: definition.name,
+    schema: definition.schema,
+    views,
+    actions,
+    apis: definition.apis || {},
+    hooks: definition.hooks || {},
+    methods: definition.methods || {},
+    options: definition.options || {},
+    context
+  }
+}
+```
+
+## 完整示例
+
+这是一个包含所有配置项的完整 User Model 示例：
+
+```typescript
+const UserModel = defineModel({
+  name: 'User',
+
+  // 1. Schema 定义
+  schema: defineSchema({
+    name: 'User',
+    fields: {
+      id: field.uuid({ required: true }),
+      email: field.email({ required: true, unique: true }),
+      name: field.string({ required: true }),
+      role: field.enum({ values: ['admin', 'user'] as const }),
+      isActive: field.boolean({ default: true })
+    }
+  }),
+
+  // 2. Views 定义（函数形式，可访问 context）
+  views: (context) => ({
+    list: {
+      type: 'list',
+      title: 'Users',
+      columns: [
+        { field: 'email', label: 'Email', sortable: true },
+        { field: 'name', label: 'Name', sortable: true },
+        { field: 'role', label: 'Role', filterable: true },
+        { field: 'isActive', label: 'Status', render: 'badge' }
+      ],
+      actions: ['create', 'edit', 'delete'],
+      bulkActions: ['delete', 'export'],
+      defaultSort: { field: 'createdAt', order: 'DESC' }
+    },
+
+    form: {
+      type: 'form',
+      title: 'User Form',
+      layout: 'vertical',
+      sections: [
+        {
+          title: 'Basic Info',
+          fields: ['email', 'name']
+        },
+        {
+          title: 'Permissions',
+          fields: ['role', 'isActive']
+        }
+      ]
+    }
+  }),
+
+  // 3. Actions 定义（函数形式，可执行）
+  actions: (context) => ({
+    // 激活用户
+    activate: async (params: { id: string | number }) => {
+      const { id } = params
+      const result = await context.repository.updateOne(id, { isActive: true })
+      context.eventBus.emit('user:activated', { id, result })
+      return result
+    },
+
+    // 停用用户
+    deactivate: async (params: { id: string | number }) => {
+      const { id } = params
+      const result = await context.repository.updateOne(id, { isActive: false })
+      context.eventBus.emit('user:deactivated', { id, result })
+      return result
+    }
+  }),
+
+  // 4. APIs 定义（可执行函数）
+  apis: {
+    getList: async (params: GetListParams) => {
+      const response = await httpClient.get('/api/users', { params })
+      return {
+        data: response.data.users,
+        total: response.data.total,
+        page: params.pagination?.page,
+        pageSize: params.pagination?.pageSize
+      }
+    },
+
+    getOne: async (id: string | number) => {
+      const response = await httpClient.get(`/api/users/${id}`)
+      return response.data
+    },
+
+    createOne: async (data: any) => {
+      const response = await httpClient.post('/api/users', { user: data })
+      return response.data
+    },
+
+    // 自定义 API
+    activate: async (id: string | number) => {
+      const response = await httpClient.post(`/api/users/${id}/activate`)
+      return response.data
+    }
+  },
+
+  // 5. Hooks 定义
+  hooks: {
+    async beforeCreate(data) {
+      // 密码加密
+      if (data.password) {
+        data.password = await hashPassword(data.password)
+      }
+      data.isActive = data.isActive ?? true
+      return data
+    },
+
+    async afterCreate(record) {
+      // 发送欢迎邮件
+      await sendWelcomeEmail(record.email)
+      console.log('User created:', record.id)
+    },
+
+    async beforeUpdate(id, data) {
+      // 验证权限
+      const currentUser = await getCurrentUser()
+      if (currentUser.role !== 'admin' && data.role) {
+        throw new Error('Only admin can change user role')
+      }
+      return data
+    }
+  },
+
+  // 6. Methods 定义
+  methods: {
+    async changeRole(id: string | number, newRole: string) {
+      const validRoles = ['admin', 'user']
+      if (!validRoles.includes(newRole)) {
+        throw new Error('Invalid role')
+      }
+      return this.update(id, { role: newRole })
+    },
+
+    async resetPassword(id: string | number) {
+      const newPassword = generateRandomPassword()
+      const hashedPassword = await hashPassword(newPassword)
+      await this.update(id, { password: hashedPassword })
+
+      const user = await this.read(id)
+      await sendPasswordResetEmail(user.email, newPassword)
+
+      return { success: true }
+    }
+  },
+
+  // 7. Options 配置
+  options: {
+    tableName: 'users',
+    description: 'User management model',
+    timestamps: true,
+    softDelete: true
+  }
+})
+```
+
+## 使用 Model
+
+### 调用 APIs
+
+```typescript
+// 获取用户列表
+const users = await UserModel.apis.getList({
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', order: 'DESC' }],
+  filter: { role: 'admin' }
+})
+
+// 获取单个用户
+const user = await UserModel.apis.getOne('user-123')
+
+// 创建用户
+const newUser = await UserModel.apis.createOne({
+  email: 'test@example.com',
+  name: 'Test User',
+  role: 'user'
+})
+```
+
+### 执行 Actions
+
+```typescript
+// 激活用户
+await UserModel.actions.activate({ id: 'user-123' })
+
+// 停用用户
+await UserModel.actions.deactivate({ id: 'user-123' })
+```
+
+### 访问 Views
+
+```typescript
+// 获取视图配置
+const viewConfigs = UserModel.views(context)
+const listView = viewConfigs.list
+const formView = viewConfigs.form
+
+console.log('List view columns:', listView.columns)
+console.log('Form view sections:', formView.sections)
+```
+
+### 调用 Methods
+
+```typescript
+await UserModel.methods.changeRole('user-123', 'admin')
+await UserModel.methods.resetPassword('user-123')
+```
+
+## 生命周期管理
+
+### 创建流程
+
+```
+beforeCreate(data)
+  → validate(data)
+  → create(data)
+  → afterCreate(record)
+```
+
+### 更新流程
+
+```
+beforeUpdate(id, data)
+  → validate(data)
+  → update(id, data)
+  → afterUpdate(record)
+```
+
+### 删除流程
+
+```
+beforeDelete(id)
+  → delete(id)
+  → afterDelete(id)
+```
+
+### 查询流程
+
+```
+beforeSearch(criteria)
+  → search(criteria)
+  → afterSearch(results)
+```
+
+## 设计优势
+
+### 统一的定义方式
+
+- ✅ 在一个地方定义所有配置
+- ✅ 相关配置集中管理
+- ✅ 易于理解和维护
+- ✅ 避免配置分散导致的遗漏
+
+### 函数式优先
+
+- ✅ APIs 和 Actions 都是可执行函数
+- ✅ 可访问 context（repository、eventBus）
+- ✅ 支持复杂的业务逻辑编排
+- ✅ 更好的类型推导和 IDE 支持
+
+### 灵活性
+
+- ✅ Views 可根据 context 动态生成
+- ✅ Actions 可组合调用其他操作
+- ✅ Hooks 提供完整的生命周期控制
+- ✅ Methods 支持自定义业务方法
+
+### 可测试性
+
+- ✅ 函数可直接测试
+- ✅ 依赖通过 context 注入
+- ✅ 易于 mock 和隔离
+- ✅ 支持单元测试和集成测试
+
+## 最佳实践
+
+### 1. Model 组织
+
+```typescript
+// 每个 Model 放在独立文件中
+// models/User.ts
+export const UserModel = defineModel({ /* ... */ })
+
+// models/Post.ts
+export const PostModel = defineModel({ /* ... */ })
+
+// models/index.ts
+export * from './User'
+export * from './Post'
+```
+
+### 2. 复用逻辑
+
+```typescript
+// 提取共同的 hooks
+const timestampHooks = {
+  beforeCreate: (data: any) => {
+    data.createdAt = new Date()
+    return data
+  },
+  beforeUpdate: (id: any, data: any) => {
+    data.updatedAt = new Date()
+    return data
+  }
+}
+
+// 在 Model 中复用
+const UserModel = defineModel({
+  // ...
+  hooks: {
+    ...timestampHooks,
+    // 其他自定义 hooks
+  }
+})
+```
+
+### 3. 类型安全
+
+```typescript
+// 定义类型
+interface User {
+  id: string
+  email: string
+  name: string
+  role: 'admin' | 'user'
+  isActive: boolean
+}
+
+// 使用泛型
+const UserModel = defineModel<User>({
+  name: 'User',
+  apis: {
+    getOne: async (id: string): Promise<User> => {
+      // TypeScript 会检查返回类型
+    }
+  }
+})
+```
+
+### 4. 错误处理
+
+```typescript
+apis: {
+  getList: async (params) => {
+    try {
+      const response = await httpClient.get('/api/users', { params })
+      return {
+        data: response.data.users || [],
+        total: response.data.total || 0
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error)
+      // 返回默认值而不是抛出错误
+      return { data: [], total: 0 }
+    }
+  }
+}
+```
+
+## 下一步
+
+深入了解其他核心层：
+
+- [Repository Layer](/docs/engine-core-layers-repository-layer) - 数据访问协调
+- [State Layer](/docs/engine-core-layers-state-layer) - 响应式状态管理
+- [Data Access Layer](/docs/engine-core-layers-data-access-layer) - 数据源访问
+
+或查看：
+
+- [Function-First Design](/docs/engine-architecture-function-first-design) - 函数式优先设计理念
+- [Architecture Overview](/docs/engine-architecture-overview) - 整体架构
+
+---
+
+**最后更新**: 2025-10-31

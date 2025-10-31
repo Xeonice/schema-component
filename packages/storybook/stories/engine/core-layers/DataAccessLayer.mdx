@@ -1,0 +1,864 @@
+import { Meta } from '@storybook/blocks'
+
+<Meta title="Engine/Core Layers/Data Access Layer" />
+
+# Data Access Layer（数据访问层）
+
+Data Access Layer 是一个独立的 IoC 层，负责与外部数据源的通信。第一版支持 HTTP，但架构设计支持未来扩展 GraphQL、WebSocket、gRPC 等多种协议。
+
+## 核心概念
+
+Data Access Layer 作为独立层具有以下特点：
+
+- **协议无关** - 通过统一接口抽象，支持多种数据访问协议
+- **插拔式设计** - 可在运行时切换不同的数据访问实现
+- **IoC 管理** - 通过依赖注入容器管理生命周期
+- **可扩展性** - 轻松添加新的协议支持
+
+## 统一数据访问接口
+
+所有数据访问实现都必须实现 `IDataAccessClient` 接口：
+
+```typescript
+/**
+ * 数据访问客户端统一接口
+ * 所有数据访问实现（HTTP、GraphQL、WebSocket 等）都需要实现此接口
+ */
+interface IDataAccessClient {
+  // 基础 CRUD
+  getList(modelName: string, params: GetListParams): Promise<GetListResult>
+  getOne(modelName: string, id: string | number): Promise<any>
+  createOne(modelName: string, data: any): Promise<any>
+  updateOne(modelName: string, id: string | number, data: any): Promise<any>
+  deleteOne(modelName: string, id: string | number): Promise<boolean>
+
+  // 批量操作
+  getMany(modelName: string, ids: Array<string | number>): Promise<any[]>
+  createMany(modelName: string, data: any[]): Promise<any[]>
+  updateMany(modelName: string, ids: Array<string | number>, data: any): Promise<any[]>
+  deleteMany(modelName: string, ids: Array<string | number>): Promise<boolean>
+
+  // 自定义查询
+  query(modelName: string, criteria: QueryCriteria): Promise<QueryResult>
+
+  // 连接管理
+  connect?(): Promise<void>
+  disconnect?(): Promise<void>
+  isConnected?(): boolean
+}
+```
+
+### 查询条件接口
+
+```typescript
+interface QueryCriteria {
+  filter?: Record<string, any>
+  sort?: Array<{ field: string; order: 'ASC' | 'DESC' }>
+  pagination?: { page: number; pageSize: number }
+  fields?: string[] // 选择返回的字段
+  relations?: string[] // 关联查询
+}
+```
+
+### 查询结果接口
+
+```typescript
+interface QueryResult {
+  data: any[]
+  total: number
+  hasMore?: boolean
+  cursor?: string // 用于游标分页
+}
+```
+
+## HTTP Client 实现（Phase 1）
+
+第一版实现了完整的 HTTP 客户端支持。
+
+### HTTP 配置接口
+
+```typescript
+interface HttpClientConfig {
+  baseURL: string
+  timeout?: number
+  headers?: Record<string, string>
+  interceptors?: {
+    request?: Array<(config: RequestConfig) => RequestConfig | Promise<RequestConfig>>
+    response?: Array<(response: ApiResponse) => ApiResponse | Promise<ApiResponse>>
+    error?: Array<(error: any) => any>
+  }
+}
+
+interface RequestConfig {
+  url?: string
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  params?: Record<string, any>
+  data?: any
+  headers?: Record<string, string>
+  timeout?: number
+}
+
+interface ApiResponse<T = any> {
+  data: T
+  status: number
+  statusText: string
+  headers: Record<string, string>
+}
+```
+
+### HTTP Data Access Client
+
+```typescript
+import { injectable, inject } from 'inversify'
+
+@injectable()
+class HttpDataAccessClient implements IDataAccessClient {
+  private httpClient: any // axios, fetch wrapper 等
+  private urlMapper: IUrlMapper
+
+  constructor(
+    @inject(TYPES.HttpClient) httpClient: any,
+    @inject(TYPES.UrlMapper) urlMapper: IUrlMapper,
+    config: HttpClientConfig
+  ) {
+    this.httpClient = httpClient
+    this.urlMapper = urlMapper
+    this.setupInterceptors(config.interceptors)
+  }
+
+  async getList(modelName: string, params: GetListParams): Promise<GetListResult> {
+    const url = this.urlMapper.mapGetList(modelName, params)
+    const requestConfig = this.buildRequestConfig('GET', url, { params })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return this.transformListResponse(response.data)
+  }
+
+  async getOne(modelName: string, id: string | number): Promise<any> {
+    const url = this.urlMapper.mapGetOne(modelName, id)
+    const requestConfig = this.buildRequestConfig('GET', url)
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  async createOne(modelName: string, data: any): Promise<any> {
+    const url = this.urlMapper.mapCreateOne(modelName)
+    const requestConfig = this.buildRequestConfig('POST', url, { data })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  async updateOne(modelName: string, id: string | number, data: any): Promise<any> {
+    const url = this.urlMapper.mapUpdateOne(modelName, id)
+    const requestConfig = this.buildRequestConfig('PUT', url, { data })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  async deleteOne(modelName: string, id: string | number): Promise<boolean> {
+    const url = this.urlMapper.mapDeleteOne(modelName, id)
+    const requestConfig = this.buildRequestConfig('DELETE', url)
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.status >= 200 && response.status < 300
+  }
+
+  // 批量操作
+  async getMany(modelName: string, ids: Array<string | number>): Promise<any[]> {
+    const url = this.urlMapper.mapGetMany(modelName, ids)
+    const requestConfig = this.buildRequestConfig('GET', url, {
+      params: { ids: ids.join(',') }
+    })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  async createMany(modelName: string, data: any[]): Promise<any[]> {
+    const url = this.urlMapper.mapCreateOne(modelName)
+    const requestConfig = this.buildRequestConfig('POST', url, {
+      data: { items: data }
+    })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  async query(modelName: string, criteria: QueryCriteria): Promise<QueryResult> {
+    const url = this.urlMapper.mapQuery(modelName)
+    const requestConfig = this.buildRequestConfig('POST', url, {
+      data: criteria
+    })
+
+    const response = await this.httpClient.request(requestConfig)
+
+    return response.data
+  }
+
+  // 工具方法
+  private buildRequestConfig(
+    method: string,
+    url: string,
+    options?: { params?: any; data?: any }
+  ): RequestConfig {
+    return {
+      method: method as any,
+      url,
+      params: options?.params,
+      data: options?.data
+    }
+  }
+
+  private transformListResponse(data: any): GetListResult {
+    // 支持不同的后端 API 响应格式
+
+    // 格式 1: 直接返回数组
+    if (Array.isArray(data)) {
+      return {
+        data,
+        total: data.length
+      }
+    }
+
+    // 格式 2: 标准格式 { data: [], total: number }
+    if (data.data && Array.isArray(data.data)) {
+      return {
+        data: data.data,
+        total: data.total || data.data.length,
+        page: data.page,
+        pageSize: data.pageSize
+      }
+    }
+
+    // 格式 3: 分页格式 { items: [], count: number }
+    if (data.items && Array.isArray(data.items)) {
+      return {
+        data: data.items,
+        total: data.count || data.items.length
+      }
+    }
+
+    // 其他格式
+    return data
+  }
+
+  private setupInterceptors(interceptors?: HttpClientConfig['interceptors']): void {
+    if (!interceptors) return
+
+    // 请求拦截器
+    interceptors.request?.forEach(interceptor => {
+      this.httpClient.interceptors.request.use(interceptor)
+    })
+
+    // 响应拦截器
+    interceptors.response?.forEach(interceptor => {
+      this.httpClient.interceptors.response.use(interceptor)
+    })
+
+    // 错误拦截器
+    interceptors.error?.forEach(interceptor => {
+      this.httpClient.interceptors.response.use(undefined, interceptor)
+    })
+  }
+}
+```
+
+## URL 映射器
+
+URL 映射器负责将 Repository 操作映射为具体的 URL。
+
+### URL 映射器接口
+
+```typescript
+/**
+ * URL 映射器接口
+ * 负责将 Repository 操作映射为具体的 URL
+ */
+interface IUrlMapper {
+  mapGetList(modelName: string, params: GetListParams): string
+  mapGetOne(modelName: string, id: string | number): string
+  mapGetMany(modelName: string, ids: Array<string | number>): string
+  mapCreateOne(modelName: string): string
+  mapUpdateOne(modelName: string, id: string | number): string
+  mapDeleteOne(modelName: string, id: string | number): string
+  mapQuery(modelName: string): string
+}
+```
+
+### REST URL 映射器实现
+
+```typescript
+/**
+ * REST 风格的 URL 映射器
+ */
+class RestUrlMapper implements IUrlMapper {
+  constructor(
+    private baseURL: string = '/api',
+    private options?: {
+      pluralize?: boolean // 是否复数化模型名
+      customRoutes?: Record<string, string> // 自定义路由映射
+    }
+  ) {}
+
+  mapGetList(modelName: string, params: GetListParams): string {
+    const resource = this.getResourceName(modelName)
+    const queryString = this.buildQueryString(params)
+    return `${this.baseURL}/${resource}${queryString}`
+  }
+
+  mapGetOne(modelName: string, id: string | number): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}/${id}`
+  }
+
+  mapGetMany(modelName: string, ids: Array<string | number>): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}`
+  }
+
+  mapCreateOne(modelName: string): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}`
+  }
+
+  mapUpdateOne(modelName: string, id: string | number): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}/${id}`
+  }
+
+  mapDeleteOne(modelName: string, id: string | number): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}/${id}`
+  }
+
+  mapQuery(modelName: string): string {
+    const resource = this.getResourceName(modelName)
+    return `${this.baseURL}/${resource}/query`
+  }
+
+  private getResourceName(modelName: string): string {
+    // 检查自定义路由
+    if (this.options?.customRoutes?.[modelName]) {
+      return this.options.customRoutes[modelName]
+    }
+
+    // 转换为小写
+    let resource = modelName.toLowerCase()
+
+    // 可选：复数化
+    if (this.options?.pluralize) {
+      resource = this.pluralize(resource)
+    }
+
+    return resource
+  }
+
+  private pluralize(word: string): string {
+    // 简单的复数化规则
+    if (word.endsWith('y')) {
+      return word.slice(0, -1) + 'ies'
+    }
+    if (word.endsWith('s')) {
+      return word + 'es'
+    }
+    return word + 's'
+  }
+
+  private buildQueryString(params: GetListParams): string {
+    const queryParams: string[] = []
+
+    // 分页
+    if (params.pagination) {
+      queryParams.push(`page=${params.pagination.page}`)
+      queryParams.push(`pageSize=${params.pagination.pageSize}`)
+    }
+
+    // 排序
+    if (params.sort && params.sort.length > 0) {
+      const sortStr = params.sort
+        .map(s => `${s.field}:${s.order}`)
+        .join(',')
+      queryParams.push(`sort=${sortStr}`)
+    }
+
+    // 过滤
+    if (params.filter) {
+      Object.entries(params.filter).forEach(([key, value]) => {
+        queryParams.push(`${key}=${encodeURIComponent(value)}`)
+      })
+    }
+
+    return queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
+  }
+}
+```
+
+## 使用示例
+
+### 基础配置
+
+```typescript
+import axios from 'axios'
+import {
+  HttpDataAccessClient,
+  RestUrlMapper,
+  Repository
+} from '@schema-component/engine'
+
+// 1. 创建 HTTP 客户端
+const httpClient = axios.create({
+  baseURL: 'https://api.example.com',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 2. 创建 URL 映射器
+const urlMapper = new RestUrlMapper('/api', {
+  pluralize: true,
+  customRoutes: {
+    'User': 'users',
+    'Post': 'posts'
+  }
+})
+
+// 3. 创建 HTTP Data Access Client
+const dataAccessClient = new HttpDataAccessClient(
+  httpClient,
+  urlMapper,
+  {
+    baseURL: 'https://api.example.com'
+  }
+)
+
+// 4. 创建 Repository
+const userRepository = new Repository('User', dataAccessClient)
+
+// 5. 使用 Repository
+const users = await userRepository.getList({
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', order: 'DESC' }],
+  filter: { role: 'admin' }
+})
+```
+
+### 配置拦截器
+
+```typescript
+const dataAccessClient = new HttpDataAccessClient(
+  httpClient,
+  urlMapper,
+  {
+    baseURL: 'https://api.example.com',
+    interceptors: {
+      // 请求拦截器
+      request: [
+        async (config) => {
+          // 添加认证 token
+          const token = await getAuthToken()
+          config.headers = {
+            ...config.headers,
+            Authorization: `Bearer ${token}`
+          }
+          return config
+        },
+        (config) => {
+          // 请求日志
+          console.log('Request:', config.method, config.url)
+          return config
+        }
+      ],
+
+      // 响应拦截器
+      response: [
+        async (response) => {
+          // 响应日志
+          console.log('Response:', response.status, response.statusText)
+          return response
+        }
+      ],
+
+      // 错误拦截器
+      error: [
+        (error) => {
+          // 统一错误处理
+          if (error.response?.status === 401) {
+            // 跳转到登录页
+            redirectToLogin()
+          }
+
+          if (error.response?.status === 500) {
+            // 显示错误提示
+            showErrorToast('Server error')
+          }
+
+          throw error
+        }
+      ]
+    }
+  }
+)
+```
+
+### 通过 DI 容器配置
+
+```typescript
+import { Container, injectable, inject } from 'inversify'
+import { TYPES } from '@schema-component/engine'
+
+// 定义标识符
+const TYPES = {
+  DataAccessClient: Symbol.for('DataAccessClient'),
+  HttpClient: Symbol.for('HttpClient'),
+  UrlMapper: Symbol.for('UrlMapper')
+}
+
+// 配置 DI 容器
+const container = new Container()
+
+// 绑定 HTTP 客户端
+container.bind(TYPES.HttpClient).toConstantValue(axios.create({
+  baseURL: 'https://api.example.com',
+  timeout: 10000
+}))
+
+// 绑定 URL 映射器
+container.bind<IUrlMapper>(TYPES.UrlMapper).toConstantValue(
+  new RestUrlMapper('/api', {
+    pluralize: true,
+    customRoutes: {
+      'User': 'users',
+      'Post': 'posts'
+    }
+  })
+)
+
+// 绑定数据访问客户端
+container.bind<IDataAccessClient>(TYPES.DataAccessClient).to(HttpDataAccessClient)
+
+// 绑定 Repository（自动注入 Data Access Client）
+container.bind<IRepository>(TYPES.Repository).to(Repository)
+
+// 使用
+const userRepository = container.get<IRepository>(TYPES.Repository)
+const users = await userRepository.getList({ /* ... */ })
+```
+
+## 未来扩展
+
+### GraphQL Client（Phase 2）
+
+```typescript
+class GraphQLDataAccessClient implements IDataAccessClient {
+  constructor(
+    private endpoint: string,
+    private client: any // Apollo Client, urql 等
+  ) {}
+
+  async getList(modelName: string, params: GetListParams): Promise<GetListResult> {
+    const query = this.buildListQuery(modelName, params)
+    const result = await this.client.query({ query })
+    return result.data
+  }
+
+  async getOne(modelName: string, id: string | number): Promise<any> {
+    const query = this.buildOneQuery(modelName, id)
+    const result = await this.client.query({ query })
+    return result.data
+  }
+
+  private buildListQuery(modelName: string, params: GetListParams): any {
+    // 构建 GraphQL 查询
+    return gql`
+      query GetList($pagination: Pagination, $filter: Filter) {
+        ${modelName.toLowerCase()}s(pagination: $pagination, filter: $filter) {
+          data {
+            id
+            # 根据 Schema 动态生成字段
+          }
+          total
+        }
+      }
+    `
+  }
+
+  // 实现其他方法...
+}
+```
+
+### WebSocket Client（Phase 3）
+
+```typescript
+class WebSocketDataAccessClient implements IDataAccessClient {
+  private ws: WebSocket
+  private requestMap: Map<string, any> = new Map()
+
+  constructor(private url: string) {
+    this.ws = new WebSocket(url)
+    this.setupListeners()
+  }
+
+  private setupListeners() {
+    this.ws.addEventListener('message', (event) => {
+      const response = JSON.parse(event.data)
+      const pending = this.requestMap.get(response.id)
+
+      if (pending) {
+        pending.resolve(response.data)
+        this.requestMap.delete(response.id)
+      }
+    })
+  }
+
+  async getOne(modelName: string, id: string | number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const requestId = this.generateRequestId()
+
+      // 保存 Promise resolver
+      this.requestMap.set(requestId, { resolve, reject })
+
+      // 发送请求
+      this.ws.send(JSON.stringify({
+        id: requestId,
+        type: 'getOne',
+        modelName,
+        params: { id }
+      }))
+
+      // 超时处理
+      setTimeout(() => {
+        if (this.requestMap.has(requestId)) {
+          this.requestMap.delete(requestId)
+          reject(new Error('Request timeout'))
+        }
+      }, 30000)
+    })
+  }
+
+  private generateRequestId(): string {
+    return `${Date.now()}-${Math.random()}`
+  }
+
+  // 实现其他方法...
+}
+```
+
+## 切换数据访问实现
+
+由于采用 IoC 设计，切换不同的数据访问实现非常简单：
+
+```typescript
+// 使用 HTTP（第一版）
+container.bind<IDataAccessClient>(TYPES.DataAccessClient).to(HttpDataAccessClient)
+
+// 切换为 GraphQL
+container.bind<IDataAccessClient>(TYPES.DataAccessClient).to(GraphQLDataAccessClient)
+
+// 切换为 WebSocket
+container.bind<IDataAccessClient>(TYPES.DataAccessClient).to(WebSocketDataAccessClient)
+
+// 同时使用多个 Data Access Client（通过 named binding）
+container.bind<IDataAccessClient>(TYPES.DataAccessClient)
+  .to(HttpDataAccessClient)
+  .whenTargetNamed('http')
+
+container.bind<IDataAccessClient>(TYPES.DataAccessClient)
+  .to(GraphQLDataAccessClient)
+  .whenTargetNamed('graphql')
+
+// 使用时指定
+const httpClient = container.getNamed<IDataAccessClient>(TYPES.DataAccessClient, 'http')
+const graphqlClient = container.getNamed<IDataAccessClient>(TYPES.DataAccessClient, 'graphql')
+```
+
+## 自定义 Data Access Client
+
+如果需要支持自定义协议：
+
+```typescript
+class CustomDataAccessClient implements IDataAccessClient {
+  async getList(modelName: string, params: GetListParams): Promise<GetListResult> {
+    // 自定义实现
+    // 例如：从本地数据库读取
+    // 或者：调用 RPC 服务
+    // 或者：从缓存获取
+  }
+
+  async getOne(modelName: string, id: string | number): Promise<any> {
+    // 自定义实现
+  }
+
+  // ... 实现其他方法
+}
+
+// 注册
+container.bind<IDataAccessClient>(TYPES.DataAccessClient).to(CustomDataAccessClient)
+```
+
+## 架构关系图
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Repository                    │
+│  • 缓存管理                                     │
+│  • 数据转换                                     │
+│  • 业务逻辑协调                                 │
+└─────────────────┬───────────────────────────────┘
+                  │ (依赖注入)
+                  ▼
+┌─────────────────────────────────────────────────┐
+│            IDataAccessClient (接口)             │
+│  • getList()                                    │
+│  • getOne()                                     │
+│  • createOne()                                  │
+│  • updateOne()                                  │
+│  • deleteOne()                                  │
+└─────────────────┬───────────────────────────────┘
+                  │ (实现)
+      ┌───────────┼───────────┬─────────────┐
+      ▼           ▼           ▼             ▼
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│   HTTP   │ │ GraphQL  │ │WebSocket │ │  Custom  │
+│  Client  │ │  Client  │ │  Client  │ │  Client  │
+│    ✅    │ │    📋    │ │    📋    │ │    💡    │
+└──────────┘ └──────────┘ └──────────┘ └──────────┘
+     │            │            │             │
+     └────────────┴────────────┴─────────────┘
+                  │
+                  ▼
+        ┌─────────────────┐
+        │  External Data  │
+        │   (数据源)      │
+        └─────────────────┘
+```
+
+## 扩展路线图
+
+### Phase 1 (第一版) - HTTP 支持 ✅
+
+- ✅ `HttpDataAccessClient` 实现
+- ✅ `RestUrlMapper` 实现
+- ✅ HTTP 拦截器支持
+- ✅ 请求/响应转换
+
+### Phase 2 (第二版) - GraphQL 支持 📋
+
+- 📋 `GraphQLDataAccessClient` 实现
+- 📋 GraphQL 查询构建器
+- 📋 GraphQL 缓存策略
+- 📋 Subscription 支持
+
+### Phase 3 (第三版) - 实时通信支持 📋
+
+- 📋 `WebSocketDataAccessClient` 实现
+- 📋 实时数据同步
+- 📋 断线重连机制
+- 📋 消息队列管理
+
+### Phase 4 (第四版) - 更多协议 📋
+
+- 📋 `gRPC` 支持
+- 📋 `MQTT` 支持
+- 📋 自定义协议支持
+
+## 最佳实践
+
+### 1. 错误处理
+
+```typescript
+class HttpDataAccessClient {
+  async getOne(modelName: string, id: string | number): Promise<any> {
+    try {
+      const url = this.urlMapper.mapGetOne(modelName, id)
+      const response = await this.httpClient.get(url)
+      return response.data
+    } catch (error) {
+      // 统一错误处理
+      throw new DataAccessError(`Failed to fetch ${modelName}:${id}`, error)
+    }
+  }
+}
+```
+
+### 2. 重试机制
+
+```typescript
+class HttpDataAccessClient {
+  private async requestWithRetry(
+    config: RequestConfig,
+    retries: number = 3
+  ): Promise<any> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await this.httpClient.request(config)
+      } catch (error) {
+        if (i === retries - 1) throw error
+
+        // 指数退避
+        await this.delay(Math.pow(2, i) * 1000)
+      }
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+}
+```
+
+### 3. 请求取消
+
+```typescript
+class HttpDataAccessClient {
+  private abortControllers: Map<string, AbortController> = new Map()
+
+  async getList(modelName: string, params: GetListParams): Promise<GetListResult> {
+    // 取消之前的请求
+    const key = `${modelName}:getList`
+    this.abortControllers.get(key)?.abort()
+
+    // 创建新的 AbortController
+    const controller = new AbortController()
+    this.abortControllers.set(key, controller)
+
+    try {
+      const url = this.urlMapper.mapGetList(modelName, params)
+      const response = await this.httpClient.get(url, {
+        signal: controller.signal
+      })
+
+      return this.transformListResponse(response.data)
+    } finally {
+      this.abortControllers.delete(key)
+    }
+  }
+}
+```
+
+## 下一步
+
+了解其他核心层：
+
+- [Model Layer](/docs/engine-core-layers-model-layer) - 领域模型定义
+- [Repository Layer](/docs/engine-core-layers-repository-layer) - 数据访问协调
+- [State Layer](/docs/engine-core-layers-state-layer) - 响应式状态管理
+
+或查看：
+
+- [HTTP Module](/docs/engine-http-overview) - HTTP 客户端详细文档
+- [Architecture Overview](/docs/engine-architecture-overview) - 整体架构
+
+---
+
+**最后更新**: 2025-10-31
