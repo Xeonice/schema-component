@@ -1,4 +1,4 @@
-import type { RenderContext, RenderDescriptor } from './types'
+import type { RenderContext, RenderDescriptor, IRenderer } from './types'
 import type { ActionDefinition } from './actionTypes'
 
 export type ViewType = 'list' | 'form' | 'detail' | 'kanban' | 'calendar' | string
@@ -34,8 +34,8 @@ export interface ViewDefinition {
  * ViewRenderer 接口
  * 基于 View 类型渲染
  */
-export interface IViewRenderer {
-  /** 支持的视图类型 */
+export interface IViewRenderer extends IRenderer {
+  category: 'view'
   type: ViewType
 
   /** 渲染视图 */
