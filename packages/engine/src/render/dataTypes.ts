@@ -1,4 +1,4 @@
-import type { RenderContext, RenderDescriptor } from './types'
+import type { RenderContext, RenderDescriptor, IRenderer } from './types'
 
 /**
  * 字段定义
@@ -16,9 +16,8 @@ export interface FieldDefinition {
  * DataRenderer 接口
  * 基于 Schema 字段类型渲染
  */
-export interface IDataRenderer {
-  /** 支持的字段类型 */
-  type: string
+export interface IDataRenderer extends IRenderer {
+  category: 'data'
 
   /** 渲染字段（展示模式） */
   render(value: any, field: FieldDefinition, context: RenderContext): RenderDescriptor

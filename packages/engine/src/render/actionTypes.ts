@@ -1,4 +1,4 @@
-import type { RenderContext, RenderDescriptor } from './types'
+import type { RenderContext, RenderDescriptor, IRenderer } from './types'
 
 export type ActionType = 'server' | 'view'
 
@@ -42,8 +42,16 @@ export type ActionDefinition = ServerActionDefinition | ViewActionDefinition
 /**
  * ActionRenderer 接口
  */
-export interface IActionRenderer {
-  renderMode: 'button' | 'menu' | 'dropdown' | 'toolbar'
+export interface IActionRenderer extends IRenderer {
+  category: 'action'
+  type: 'button' | 'menu' | 'dropdown' | 'toolbar' | 'link' | 'fab' | string
+
+  /** 渲染动作 */
+  render(action: ActionDefinition, context: RenderContext): RenderDescriptor
+
+  /** 渲染服务端动作（可选，向后兼容） */
   renderServer?(action: ServerActionDefinition, context: RenderContext): RenderDescriptor
+
+  /** 渲染视图动作（可选，向后兼容） */
   renderView?(action: ViewActionDefinition, context: RenderContext): RenderDescriptor
 }
