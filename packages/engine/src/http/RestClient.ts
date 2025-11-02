@@ -4,7 +4,7 @@
  */
 
 import type { IHttpClient, HttpResponse, HttpRequestConfig } from './types'
-import type { GetListParams, GetListResult } from '../repository/types'
+import type { GetListParams, GetListResult } from '../core/types'
 
 /**
  * REST Client 配置
@@ -27,12 +27,9 @@ export interface RestClientConfig {
 export class RestClient {
   private httpClient: IHttpClient
   private resourcePath: string
-  private idField: string
-
   constructor(config: RestClientConfig) {
     this.httpClient = config.httpClient
     this.resourcePath = config.resourcePath
-    this.idField = config.idField || 'id'
   }
 
   /**
@@ -51,7 +48,7 @@ export class RestClient {
     // 处理排序参数
     if (params?.sort && params.sort.length > 0) {
       queryParams.sort = params.sort
-        .map((s) => `${s.field}:${s.order}`)
+        .map((s: { field: string; order: string }) => `${s.field}:${s.order}`)
         .join(',')
     }
 

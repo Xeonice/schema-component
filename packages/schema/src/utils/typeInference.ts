@@ -123,7 +123,7 @@ export function validatePartial<S extends SchemaDefinition<any>>(
   schema: S,
   data: unknown
 ): z.SafeParseReturnType<unknown, Partial<InferSchemaType<S>>> {
-  return schema.zodSchema.partial().safeParse(data)
+  return (schema.zodSchema as any).partial().safeParse(data)
 }
 
 /**
@@ -133,7 +133,7 @@ export function validateRequired<S extends SchemaDefinition<any>>(
   schema: S,
   data: unknown
 ): z.SafeParseReturnType<unknown, RequiredFieldsOf<S>> {
-  return schema.zodSchema.required().safeParse(data)
+  return (schema.zodSchema as any).required().safeParse(data)
 }
 
 /**
@@ -151,7 +151,7 @@ export function getSchemaFieldNames<S extends SchemaDefinition<any>>(
 export function hasSchemaField<S extends SchemaDefinition<any>>(
   schema: S,
   fieldName: string
-): fieldName is keyof InferSchemaType<S> {
+): fieldName is keyof InferSchemaType<S> & string {
   return fieldName in schema.fields
 }
 
@@ -209,8 +209,8 @@ export function mergeSchemas<
     fields: fields as S1['fields'] & S2['fields'],
     options: schema1.options,
     zodSchema: z.object({
-      ...schema1.zodSchema.shape,
-      ...schema2.zodSchema.shape
+      ...(schema1.zodSchema as any).shape,
+      ...(schema2.zodSchema as any).shape
     }) as any
   }
 }

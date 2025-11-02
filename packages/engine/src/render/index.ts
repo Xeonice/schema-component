@@ -6,12 +6,22 @@ export type {
   IDrawerController,
   IMessageController,
   ModalConfig,
-  DrawerConfig
+  DrawerConfig,
+  IRenderer,
+  RendererCategory,
+  GroupDefinition,
+  FieldDefinition,
+  DataDefinition,
+  FieldRenderData,
+  FieldRenderContext,
+  BatchRenderData,
+  IGroupRenderer,
+  IFieldRenderer
 } from './types'
 
 // Data Renderer Types
 export type {
-  FieldDefinition,
+  FieldDefinition as DataFieldDefinition,
   IDataRenderer
 } from './dataTypes'
 
@@ -48,6 +58,11 @@ export {
   type ActionStatus,
   type ActionQueueConfig
 } from './ActionQueue'
+
+// RendererRegistry
+export {
+  RendererRegistry
+} from './RendererRegistry'
 
 // RenderEngine
 export {

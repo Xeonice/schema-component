@@ -18,17 +18,17 @@ export function array<T extends z.ZodTypeAny>(
   itemSchema: T,
   options: ArrayFieldOptions = {}
 ): BaseFieldDefinition<z.infer<T>[]> {
-  let schema = z.array(itemSchema, {
+  let schema: z.ZodType<z.infer<T>[]> = z.array(itemSchema, {
     required_error: options.errorMessages?.required,
     invalid_type_error: options.errorMessages?.invalid
   })
 
   // 应用数组长度约束
   if (options.minItems !== undefined) {
-    schema = schema.min(options.minItems, options.errorMessages?.minItems)
+    schema = (schema as z.ZodArray<T>).min(options.minItems, options.errorMessages?.minItems)
   }
   if (options.maxItems !== undefined) {
-    schema = schema.max(options.maxItems, options.errorMessages?.maxItems)
+    schema = (schema as z.ZodArray<T>).max(options.maxItems, options.errorMessages?.maxItems)
   }
 
   // 应用唯一性约束
@@ -46,13 +46,13 @@ export function array<T extends z.ZodTypeAny>(
 
   // 处理可选性和默认值
   if (!options.required && options.default === undefined) {
-    schema = schema.optional()
+    schema = schema.optional() as z.ZodType<z.infer<T>[]>
   }
   if (options.nullable) {
-    schema = schema.nullable()
+    schema = schema.nullable() as z.ZodType<z.infer<T>[]>
   }
   if (options.default !== undefined) {
-    schema = schema.default(options.default as any)
+    schema = schema.default(options.default as any) as z.ZodType<z.infer<T>[]>
   }
 
   return {
@@ -60,8 +60,8 @@ export function array<T extends z.ZodTypeAny>(
     options: {
       ...options,
       items: itemSchema
-    },
-    zodSchema: schema
+    } as any,
+    zodSchema: schema as any
   }
 }
 

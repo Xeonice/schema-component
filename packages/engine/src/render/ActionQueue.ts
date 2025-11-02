@@ -2,6 +2,9 @@ import { makeObservable, observable, computed, action, runInAction } from 'mobx'
 import type { ServerActionDefinition } from './actionTypes'
 import type { RenderContext } from './types'
 
+// 声明全局函数以避免编译错误
+declare const setTimeout: (callback: () => void, ms: number) => any
+
 export type ActionStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
 
 export interface ActionTask {
@@ -211,7 +214,8 @@ export class ActionQueue implements IActionQueue {
         }
       })
 
-      if (task.status === 'failed') {
+      // 检查任务是否最终失败（不再重试）
+      if (task.retryCount >= task.maxRetries) {
         task.action.onError?.(error as Error, task.context)
       }
     }

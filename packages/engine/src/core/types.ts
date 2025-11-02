@@ -110,19 +110,19 @@ export interface ModelDefinition {
   schema: any // SchemaDefinition from @schema-component/schema
 
   // 视图定义（函数或对象）
-  views?: ViewsDefinition
+  views?: import('./viewTypes').ViewsDefinition
 
   // 动作定义（函数或对象）
-  actions?: ActionsDefinition
+  actions?: import('./actionTypes').ActionsDefinition
 
   // API 定义（可执行函数）
-  apis?: ApisDefinition
+  apis?: import('./apiTypes').ApisDefinition
 
   // 生命周期钩子
-  hooks?: HooksDefinition
+  hooks?: import('./apiTypes').HooksDefinition
 
   // 自定义方法
-  methods?: MethodsDefinition
+  methods?: import('./apiTypes').MethodsDefinition
 
   // Repository 配置或实例
   repository?: IRepository | {

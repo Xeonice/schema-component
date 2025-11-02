@@ -109,7 +109,7 @@ export function defineSchema<T extends FieldDefinitions>(config: {
     zodShape[fieldName] = field.zodSchema
   }
 
-  let zodSchema = z.object(zodShape)
+  let zodSchema: z.ZodTypeAny = z.object(zodShape)
 
   // 添加自定义验证
   if (schemaOptions.validate) {

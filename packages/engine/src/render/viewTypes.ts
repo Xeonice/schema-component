@@ -1,4 +1,4 @@
-import type { RenderContext, RenderDescriptor } from './types'
+import type { RenderContext, RenderDescriptor, IRenderer } from './types'
 import type { ActionDefinition } from './actionTypes'
 
 export type ViewType = 'list' | 'form' | 'detail' | 'kanban' | 'calendar' | string
@@ -32,12 +32,9 @@ export interface ViewDefinition {
 
 /**
  * ViewRenderer 接口
- * 基于 View 类型渲染
+ * 基于 View 类型渲染（修复LSP违反问题）
  */
-export interface IViewRenderer {
-  /** 支持的视图类型 */
+export interface IViewRenderer extends IRenderer<ViewDefinition, any, RenderContext> {
+  category: 'view'
   type: ViewType
-
-  /** 渲染视图 */
-  render(view: ViewDefinition, data: any, context: RenderContext): RenderDescriptor
 }

@@ -23,11 +23,10 @@ export interface HttpRepositoryConfig {
  */
 export class HttpRepository implements IRepository {
   private restClient: RestClient
-  private autoHooks: boolean
 
   constructor(config: HttpRepositoryConfig) {
     this.restClient = config.restClient
-    this.autoHooks = config.autoHooks ?? false
+    // autoHooks 配置暂时未使用，但保留在配置接口中用于将来扩展
   }
 
   /**

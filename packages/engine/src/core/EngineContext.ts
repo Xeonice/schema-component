@@ -7,6 +7,14 @@ import { Container } from '../di/Container'
 import { TYPES } from '../di/types'
 import { getEventBus, EventBus } from '../event/EventBus'
 
+// 声明全局类型以避免 Node.js/Browser 环境冲突
+declare const console: {
+  warn: (message?: any, ...optionalParams: any[]) => void
+  log: (message?: any, ...optionalParams: any[]) => void
+  error: (message?: any, ...optionalParams: any[]) => void
+}
+declare const require: (id: string) => any
+
 /**
  * Engine 配置接口
  */
@@ -224,7 +232,7 @@ export class EngineContext {
    * @returns 配置值
    */
   getConfig<T = any>(key: string, defaultValue?: T): T {
-    return this.config[key] !== undefined ? this.config[key] : defaultValue
+    return this.config[key] !== undefined ? this.config[key] as T : defaultValue as T
   }
 
   /**

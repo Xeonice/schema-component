@@ -13,7 +13,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 
  */
 export interface HttpRequestConfig {
   /** 请求 URL */
-  url: string
+  url?: string
 
   /** HTTP 方法 */
   method?: HttpMethod
@@ -139,27 +139,27 @@ export interface IHttpClient {
   /**
    * 发送 GET 请求
    */
-  get<T = any>(url: string, config?: HttpRequestConfig): Promise<HttpResponse<T>>
+  get<T = any>(url: string, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>>
 
   /**
    * 发送 POST 请求
    */
-  post<T = any>(url: string, data?: any, config?: HttpRequestConfig): Promise<HttpResponse<T>>
+  post<T = any>(url: string, data?: any, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>>
 
   /**
    * 发送 PUT 请求
    */
-  put<T = any>(url: string, data?: any, config?: HttpRequestConfig): Promise<HttpResponse<T>>
+  put<T = any>(url: string, data?: any, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>>
 
   /**
    * 发送 PATCH 请求
    */
-  patch<T = any>(url: string, data?: any, config?: HttpRequestConfig): Promise<HttpResponse<T>>
+  patch<T = any>(url: string, data?: any, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>>
 
   /**
    * 发送 DELETE 请求
    */
-  delete<T = any>(url: string, config?: HttpRequestConfig): Promise<HttpResponse<T>>
+  delete<T = any>(url: string, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>>
 
   /**
    * 发送通用请求

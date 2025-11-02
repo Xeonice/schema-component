@@ -43,6 +43,7 @@ const config = {
           '@schema-component/schema': path.resolve(__dirname, '../../schema/src'),
           '@schema-component/engine': path.resolve(__dirname, '../../engine/src'),
           '@schema-component/theme': path.resolve(__dirname, '../../theme/src'),
+          '@schema-component/react-connector': path.resolve(__dirname, '../../react-connector/src'),
           '@': path.resolve(__dirname, '../src')
         }
       },

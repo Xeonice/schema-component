@@ -1,0 +1,34 @@
+{
+  "name": "@schema-component/react-connector",
+  "version": "0.1.0",
+  "description": "React connector for schema-component rendering system",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@schema-component/engine": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "mobx": "^6.10.0",
+    "mobx-react-lite": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0",
+    "vite": "^4.0.0",
+    "vite-plugin-dts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  }
+}
