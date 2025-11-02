@@ -258,7 +258,7 @@ export interface SchemaDefinition<T extends FieldDefinitions = FieldDefinitions>
   /** Schema 配置 */
   options: SchemaOptions
   /** Zod Schema */
-  zodSchema: z.ZodObject<any>
+  zodSchema: z.ZodTypeAny
 }
 
 // ============================================================================
@@ -299,7 +299,7 @@ export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 /**
  * 标记字段为必选
  */
-export type Required<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
+export type RequiredPartial<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
 
 /**
  * 提取必选字段

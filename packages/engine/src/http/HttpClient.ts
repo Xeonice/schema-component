@@ -57,7 +57,7 @@ export class HttpClient implements IHttpClient {
 
     // 默认响应拦截器：转换响应格式
     this.axiosInstance.interceptors.response.use(
-      (response: AxiosResponse) => {
+      (response: AxiosResponse): any => {
         return this.transformResponse(response)
       },
       (error: AxiosError) => {
@@ -75,7 +75,10 @@ export class HttpClient implements IHttpClient {
       status: axiosResponse.status,
       statusText: axiosResponse.statusText,
       headers: axiosResponse.headers as Record<string, string>,
-      config: axiosResponse.config as HttpRequestConfig
+      config: {
+        ...axiosResponse.config,
+        url: axiosResponse.config?.url || ''
+      } as HttpRequestConfig
     }
   }
 
@@ -104,31 +107,11 @@ export class HttpClient implements IHttpClient {
     return error
   }
 
-  /**
-   * 合并配置
-   */
-  private mergeConfig(
-    config1: HttpRequestConfig = {},
-    config2: HttpRequestConfig = {}
-  ): AxiosRequestConfig {
-    return {
-      ...config1,
-      ...config2,
-      headers: {
-        ...config1.headers,
-        ...config2.headers
-      },
-      params: {
-        ...config1.params,
-        ...config2.params
-      }
-    } as AxiosRequestConfig
-  }
 
   /**
    * GET 请求
    */
-  async get<T = any>(url: string, config?: HttpRequestConfig): Promise<HttpResponse<T>> {
+  async get<T = any>(url: string, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>> {
     return this.request<T>({
       url,
       method: 'GET',
@@ -142,7 +125,7 @@ export class HttpClient implements IHttpClient {
   async post<T = any>(
     url: string,
     data?: any,
-    config?: HttpRequestConfig
+    config?: Omit<HttpRequestConfig, 'url'>
   ): Promise<HttpResponse<T>> {
     return this.request<T>({
       url,
@@ -158,7 +141,7 @@ export class HttpClient implements IHttpClient {
   async put<T = any>(
     url: string,
     data?: any,
-    config?: HttpRequestConfig
+    config?: Omit<HttpRequestConfig, 'url'>
   ): Promise<HttpResponse<T>> {
     return this.request<T>({
       url,
@@ -174,7 +157,7 @@ export class HttpClient implements IHttpClient {
   async patch<T = any>(
     url: string,
     data?: any,
-    config?: HttpRequestConfig
+    config?: Omit<HttpRequestConfig, 'url'>
   ): Promise<HttpResponse<T>> {
     return this.request<T>({
       url,
@@ -187,7 +170,7 @@ export class HttpClient implements IHttpClient {
   /**
    * DELETE 请求
    */
-  async delete<T = any>(url: string, config?: HttpRequestConfig): Promise<HttpResponse<T>> {
+  async delete<T = any>(url: string, config?: Omit<HttpRequestConfig, 'url'>): Promise<HttpResponse<T>> {
     return this.request<T>({
       url,
       method: 'DELETE',

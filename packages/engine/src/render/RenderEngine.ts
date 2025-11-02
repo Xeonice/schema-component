@@ -1,4 +1,9 @@
 import { makeObservable } from 'mobx'
+
+// 声明console全局对象
+declare const console: {
+  error: (message?: any, ...optionalParams: any[]) => void
+}
 import type { IDataRenderer } from './dataTypes'
 import type { IViewRenderer, ViewDefinition } from './viewTypes'
 import type { IActionRenderer, ActionDefinition, ServerActionDefinition, ViewActionDefinition } from './actionTypes'

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react'
 import type {
   RenderContext as EngineRenderContext,
-  ViewDefinition,
+  RenderViewDefinition as ViewDefinition,
   GroupDefinition,
   FieldDefinition,
   ActionDefinition,

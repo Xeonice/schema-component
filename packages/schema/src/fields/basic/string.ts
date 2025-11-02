@@ -15,7 +15,10 @@ import type {
  * 创建字符串字段
  */
 export function string(options: StringFieldOptions = {}): BaseFieldDefinition<string> {
-  let schema = z.string()
+  let schema = z.string({
+    required_error: options.errorMessages?.required,
+    invalid_type_error: options.errorMessages?.invalid
+  })
 
   // 应用字符串转换
   if (options.trim) {
@@ -67,19 +70,19 @@ export function string(options: StringFieldOptions = {}): BaseFieldDefinition<st
 
   // 处理可选性和默认值
   if (!options.required && options.default === undefined) {
-    schema = schema.optional()
+    schema = schema.optional() as any
   }
   if (options.nullable) {
-    schema = schema.nullable()
+    schema = schema.nullable() as any
   }
   if (options.default !== undefined) {
-    schema = schema.default(options.default)
+    schema = schema.default(options.default) as any
   }
 
   return {
     type: 'string' as FieldType,
     options,
-    zodSchema: schema
+    zodSchema: schema as any
   }
 }
 

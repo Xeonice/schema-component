@@ -29,14 +29,13 @@ export class ModelStore<T = any> implements IModelStore<T> {
   // ============================================================================
 
   private repository: IRepository
-  private modelName: string
 
   // ============================================================================
   // Constructor
   // ============================================================================
 
   constructor(config: StoreConfig) {
-    this.modelName = config.modelName
+    // modelName 配置保留在配置接口中，但当前实现中未使用
     this.repository = config.repository
     this.pageSize = config.defaultPageSize || 20
 

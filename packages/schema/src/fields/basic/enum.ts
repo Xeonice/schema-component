@@ -21,26 +21,26 @@ export function enumField<T extends readonly [string, ...string[]]>(
     throw new Error('Enum field must have at least one value')
   }
 
-  let schema = z.enum(options.values as [string, ...string[]], {
+  let schema = z.enum(options.values as unknown as [string, ...string[]], {
     required_error: options.errorMessages?.required,
     invalid_type_error: options.errorMessages?.invalid
   })
 
   // 处理可选性和默认值
   if (!options.required && options.default === undefined) {
-    schema = schema.optional()
+    schema = schema.optional() as any
   }
   if (options.nullable) {
-    schema = schema.nullable()
+    schema = schema.nullable() as any
   }
   if (options.default !== undefined) {
-    schema = schema.default(options.default as any)
+    schema = schema.default(options.default as any) as any
   }
 
   return {
     type: 'enum' as FieldType,
     options,
-    zodSchema: schema
+    zodSchema: schema as any
   }
 }
 
@@ -51,20 +51,20 @@ export function nativeEnum<T extends Record<string, string | number>>(
   enumObject: T,
   options: Omit<EnumFieldOptions<any>, 'values'> = {}
 ): BaseFieldDefinition<T[keyof T]> {
-  let schema = z.nativeEnum(enumObject, {
+  let schema = z.nativeEnum(enumObject as any, {
     required_error: options.errorMessages?.required,
     invalid_type_error: options.errorMessages?.invalid
   })
 
   // 处理可选性和默认值
   if (!options.required && options.default === undefined) {
-    schema = schema.optional()
+    schema = schema.optional() as any
   }
   if (options.nullable) {
-    schema = schema.nullable()
+    schema = schema.nullable() as any
   }
   if (options.default !== undefined) {
-    schema = schema.default(options.default)
+    schema = schema.default(options.default) as any
   }
 
   return {
@@ -72,7 +72,7 @@ export function nativeEnum<T extends Record<string, string | number>>(
     options: {
       ...options,
       values: Object.values(enumObject) as any
-    },
-    zodSchema: schema
+    } as any,
+    zodSchema: schema as any
   }
 }

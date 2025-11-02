@@ -32,27 +32,27 @@ export function date(options: DateFieldOptions = {}): BaseFieldDefinition<Date> 
 
   // 处理自动创建时间
   if (options.autoCreate) {
-    schema = schema.default(() => new Date())
+    schema = schema.default(() => new Date()) as any
   }
 
   // 处理可选性和默认值
   if (!options.required && options.default === undefined && !options.autoCreate) {
-    schema = schema.optional()
+    schema = schema.optional() as any
   }
   if (options.nullable) {
-    schema = schema.nullable()
+    schema = schema.nullable() as any
   }
   if (options.default !== undefined && !options.autoCreate) {
     const defaultDate = typeof options.default === 'string'
       ? new Date(options.default)
       : options.default
-    schema = schema.default(defaultDate)
+    schema = schema.default(defaultDate) as any
   }
 
   return {
     type: 'date' as FieldType,
     options,
-    zodSchema: schema
+    zodSchema: schema as any
   }
 }
 

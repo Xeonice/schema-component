@@ -11,7 +11,7 @@ export {
 
 // Re-export Engine types for convenience
 export type {
-  ViewDefinition,
+  RenderViewDefinition as ViewDefinition,
   GroupDefinition,
   FieldDefinition,
   DataDefinition,

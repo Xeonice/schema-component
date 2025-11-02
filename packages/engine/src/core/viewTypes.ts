@@ -2,7 +2,15 @@
  * View related types
  */
 
-import type { ModelContext } from './types'
+// 为了避免循环依赖，在这里前置声明 ModelContext
+interface ModelContext {
+  modelName: string
+  schema: any
+  repository: any
+  eventBus: any
+  store?: any
+  [key: string]: any
+}
 
 // ============================================================================
 // View Types
