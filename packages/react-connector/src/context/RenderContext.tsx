@@ -1,111 +1,245 @@
 import React, { createContext, useContext, ReactNode } from 'react'
-import type { RenderEngine } from '@schema-component/engine'
-import type { RenderDescriptorConverter, ComponentMap } from '../core'
 import type {
-  IViewLoader,
-  IGroupLoader,
-  IFieldLoader,
-  IDataLoader,
-  IActionLoader
-} from '../layers'
+  RenderContext as EngineRenderContext,
+  ViewDefinition,
+  GroupDefinition,
+  FieldDefinition,
+  ActionDefinition,
+  FieldRenderData,
+  FieldRenderContext,
+  DataDefinition,
+  RenderDescriptor
+} from '@schema-component/engine'
+import { RenderEngine } from '@schema-component/engine'
+
+/**
+ * API 层接口
+ */
+export interface IApiLayer {
+  getList(params?: any): Promise<any[]>
+  getOne(id: string | number): Promise<any>
+  create(data: any): Promise<any>
+  update(id: string | number, data: any): Promise<any>
+  delete(id: string | number): Promise<void>
+}
+
+/**
+ * RenderDescriptor 转换器接口
+ */
+export interface IRenderDescriptorConverter {
+  convert(descriptor: RenderDescriptor): React.ReactElement
+}
 
 /**
  * React 渲染上下文接口
  */
-export interface ReactRenderContextValue {
-  // 核心引擎
-  engine: RenderEngine
+export interface IReactRenderContext {
+  // 继承 Engine 的 context
+  engineContext: EngineRenderContext
+
+  // API 层
+  api: IApiLayer
 
   // 转换器
-  converter: RenderDescriptorConverter
+  converter: IRenderDescriptorConverter
 
-  // 各层加载器
-  viewLoader: IViewLoader
-  groupLoader: IGroupLoader
-  fieldLoader: IFieldLoader
-  dataLoader: IDataLoader
-  actionLoader: IActionLoader
+  // 核心渲染方法 - 直接调用 Engine 层并转换结果
+  renderView(view: ViewDefinition, options?: { id?: string | number; params?: any }): React.ReactElement
+  renderGroup(group: GroupDefinition, data: any): React.ReactElement
+  renderField(field: FieldDefinition, data: FieldRenderData, context?: Partial<FieldRenderContext>): React.ReactElement
+  renderData(definition: DataDefinition, value: any): React.ReactElement
+  renderAction(action: ActionDefinition): React.ReactElement
+}
 
-  // 组件映射
-  componentMap: ComponentMap
+/**
+ * API 层实现
+ */
+class ApiLayer implements IApiLayer {
+  constructor(private engineContext: EngineRenderContext) {}
 
-  // 配置选项
-  options: {
-    enableCache?: boolean
-    debugMode?: boolean
-    errorBoundary?: boolean
+  async getList(params?: any): Promise<any[]> {
+    const model = this.engineContext.model
+    if (!model || !model.apis || !model.apis.getList) {
+      throw new Error(`No getList API found in model: ${this.engineContext.modelName}`)
+    }
+    const result = await model.apis.getList(params)
+    return result.data || result
+  }
+
+  async getOne(id: string | number): Promise<any> {
+    const model = this.engineContext.model
+    if (!model || !model.apis || !model.apis.getOne) {
+      throw new Error(`No getOne API found in model: ${this.engineContext.modelName}`)
+    }
+    return await model.apis.getOne(id)
+  }
+
+  async create(data: any): Promise<any> {
+    const model = this.engineContext.model
+    if (!model || !model.apis || !model.apis.create) {
+      throw new Error(`No create API found in model: ${this.engineContext.modelName}`)
+    }
+    return await model.apis.create(data)
+  }
+
+  async update(id: string | number, data: any): Promise<any> {
+    const model = this.engineContext.model
+    if (!model || !model.apis || !model.apis.update) {
+      throw new Error(`No update API found in model: ${this.engineContext.modelName}`)
+    }
+    return await model.apis.update(id, data)
+  }
+
+  async delete(id: string | number): Promise<void> {
+    const model = this.engineContext.model
+    if (!model || !model.apis || !model.apis.delete) {
+      throw new Error(`No delete API found in model: ${this.engineContext.modelName}`)
+    }
+    return await model.apis.delete(id)
   }
 }
 
 /**
- * React 渲染上下文
+ * RenderDescriptor 转换器实现
  */
-const ReactRenderContext = createContext<ReactRenderContextValue | null>(null)
+class RenderDescriptorConverter implements IRenderDescriptorConverter {
+  convert(descriptor: RenderDescriptor): React.ReactElement {
+    const { component, props = {}, children, key } = descriptor
+
+    // 递归转换子元素
+    const reactChildren = children?.map((child, index) => {
+      if (typeof child === 'string') {
+        return child
+      }
+      return this.convert({
+        ...child,
+        key: child.key ?? index
+      })
+    })
+
+    // 创建 React 元素
+    return React.createElement(component, { key, ...props }, ...reactChildren || [])
+  }
+}
 
 /**
- * React 渲染上下文提供者属性
+ * React 渲染上下文实现
  */
-export interface ReactRenderProviderProps {
-  value: ReactRenderContextValue
+class ReactRenderContext implements IReactRenderContext {
+  public api: IApiLayer
+  public converter: IRenderDescriptorConverter
+
+  constructor(public engineContext: EngineRenderContext) {
+    this.api = new ApiLayer(engineContext)
+    this.converter = new RenderDescriptorConverter()
+  }
+
+  renderView(view: ViewDefinition, options?: { id?: string | number; params?: any }): React.ReactElement {
+    // 直接调用 Engine 的渲染方法
+    const renderEngine = RenderEngine.getInstance()
+    const descriptor = renderEngine.renderView(view, {}, this.engineContext)
+    return this.converter.convert(descriptor)
+  }
+
+  renderGroup(group: GroupDefinition, data: any): React.ReactElement {
+    // 直接调用 Engine 的渲染方法
+    const renderEngine = RenderEngine.getInstance()
+    const descriptor = renderEngine.renderGroup(group, data, this.engineContext)
+    return this.converter.convert(descriptor)
+  }
+
+  renderField(field: FieldDefinition, data: FieldRenderData, context?: Partial<FieldRenderContext>): React.ReactElement {
+    // 构建字段上下文
+    const fieldContext: FieldRenderContext = {
+      ...this.engineContext,
+      mode: context?.mode || 'view',
+      required: context?.required || field.required,
+      disabled: context?.disabled || false,
+      errors: context?.errors || []
+    }
+
+    // 直接调用 Engine 的渲染方法
+    const renderEngine = RenderEngine.getInstance()
+    const descriptor = renderEngine.renderField(
+      field,
+      data.value,
+      data.record,
+      fieldContext
+    )
+    return this.converter.convert(descriptor)
+  }
+
+  renderData(definition: DataDefinition, value: any): React.ReactElement {
+    // 直接调用 Engine 的渲染方法
+    const renderEngine = RenderEngine.getInstance()
+    const descriptor = renderEngine.renderData(
+      definition,
+      value,
+      this.engineContext
+    )
+    return this.converter.convert(descriptor)
+  }
+
+  renderAction(action: ActionDefinition): React.ReactElement {
+    // 直接调用 Engine 的渲染方法
+    const renderEngine = RenderEngine.getInstance()
+    const descriptor = renderEngine.renderAction(action, this.engineContext)
+    return this.converter.convert(descriptor)
+  }
+}
+
+/**
+ * React Context
+ */
+const RenderContext = createContext<IReactRenderContext | undefined>(undefined)
+
+/**
+ * RenderContext Provider Props
+ */
+export interface RenderContextProviderProps {
+  engineContext: EngineRenderContext
   children: ReactNode
 }
 
 /**
- * React 渲染上下文提供者
+ * RenderContext Provider
  */
-export const ReactRenderProvider: React.FC<ReactRenderProviderProps> = ({ value, children }) => {
+export const RenderContextProvider: React.FC<RenderContextProviderProps> = ({
+  engineContext,
+  children
+}) => {
+  const [context] = React.useState(() => new ReactRenderContext(engineContext))
+
   return (
-    <ReactRenderContext.Provider value={value}>
+    <RenderContext.Provider value={context}>
       {children}
-    </ReactRenderContext.Provider>
+    </RenderContext.Provider>
   )
 }
 
 /**
- * 使用 React 渲染上下文的 Hook
+ * useRenderContext Hook
  */
-export const useReactRenderContext = (): ReactRenderContextValue => {
-  const context = useContext(ReactRenderContext)
+export const useRenderContext = (): IReactRenderContext => {
+  const context = useContext(RenderContext)
   if (!context) {
-    throw new Error('useReactRenderContext must be used within a ReactRenderProvider')
+    throw new Error('useRenderContext must be used within a RenderContextProvider')
   }
   return context
 }
 
 /**
- * 使用渲染引擎的 Hook
+ * useApi Hook - 访问 API 层
  */
-export const useRenderEngine = (): RenderEngine => {
-  const { engine } = useReactRenderContext()
-  return engine
+export const useApi = (): IApiLayer => {
+  const context = useRenderContext()
+  return context.api
 }
 
 /**
- * 使用转换器的 Hook
+ * useConverter Hook - 访问转换器
  */
-export const useConverter = (): RenderDescriptorConverter => {
-  const { converter } = useReactRenderContext()
-  return converter
-}
-
-/**
- * 使用组件映射的 Hook
- */
-export const useComponentMap = (): ComponentMap => {
-  const { componentMap } = useReactRenderContext()
-  return componentMap
-}
-
-/**
- * 使用加载器的 Hook
- */
-export const useLoaders = () => {
-  const { viewLoader, groupLoader, fieldLoader, dataLoader, actionLoader } = useReactRenderContext()
-  return {
-    viewLoader,
-    groupLoader,
-    fieldLoader,
-    dataLoader,
-    actionLoader
-  }
+export const useConverter = (): IRenderDescriptorConverter => {
+  const context = useRenderContext()
+  return context.converter
 }

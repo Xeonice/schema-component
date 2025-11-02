@@ -11,6 +11,10 @@ export type {
   RendererCategory,
   GroupDefinition,
   FieldDefinition,
+  DataDefinition,
+  FieldRenderData,
+  FieldRenderContext,
+  BatchRenderData,
   IGroupRenderer,
   IFieldRenderer
 } from './types'

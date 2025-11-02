@@ -8,12 +8,12 @@ import type { IActionQueue } from './ActionQueue'
 export type RendererCategory = 'view' | 'group' | 'field' | 'data' | 'action'
 
 /**
- * 统一的渲染器接口
+ * 统一的渲染器接口（使用泛型支持类型安全）
  */
-export interface IRenderer {
+export interface IRenderer<TDefinition = any, TData = any, TContext = RenderContext> {
   category: RendererCategory
   type: string
-  render(definition: any, data: any, context: RenderContext): RenderDescriptor
+  render(definition: TDefinition, data: TData, context: TContext): RenderDescriptor
 }
 
 /**
@@ -138,28 +138,17 @@ export interface FieldDefinition {
 /**
  * GroupRenderer 接口
  */
-export interface IGroupRenderer extends IRenderer {
+export interface IGroupRenderer extends IRenderer<GroupDefinition, any, RenderContext> {
   category: 'group'
   type: 'card' | 'collapse' | 'tab' | 'section' | 'accordion' | string
-
-  /** 渲染分组 */
-  render(group: GroupDefinition, data: any, context: RenderContext): RenderDescriptor
 }
 
 /**
- * FieldRenderer 接口
+ * FieldRenderer 接口（修复LSP违反问题）
  */
-export interface IFieldRenderer extends Omit<IRenderer, 'render'> {
+export interface IFieldRenderer extends IRenderer<FieldDefinition, FieldRenderData, FieldRenderContext> {
   category: 'field'
   type: 'horizontal' | 'vertical' | 'inline' | 'grid' | string
-
-  /** 渲染字段 */
-  render(
-    field: FieldDefinition,
-    value: any,
-    record: any,
-    context: RenderContext & { mode?: 'view' | 'edit' }
-  ): RenderDescriptor
 }
 
 /**
@@ -170,4 +159,48 @@ export interface DataDefinition {
   name: string
   format?: string
   [key: string]: any
+}
+
+/**
+ * 字段渲染数据结构
+ */
+export interface FieldRenderData {
+  /** 当前字段的值 */
+  value: any
+  /** 完整的记录数据 */
+  record: any
+  /** 在数组中的索引（可选） */
+  index?: number
+  /** 字段在表单中的路径（可选） */
+  fieldPath?: string
+}
+
+/**
+ * 字段渲染上下文
+ */
+export interface FieldRenderContext extends RenderContext {
+  /** 渲染模式：查看 | 编辑 */
+  mode?: 'view' | 'edit'
+  /** 是否为必填字段 */
+  required?: boolean
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 验证错误信息 */
+  errors?: string[]
+}
+
+/**
+ * 批量渲染数据结构
+ */
+export interface BatchRenderData<T = any> {
+  /** 数据项列表 */
+  items: T[]
+  /** 总数量 */
+  total?: number
+  /** 当前页码 */
+  page?: number
+  /** 页面大小 */
+  pageSize?: number
+  /** 是否正在加载 */
+  loading?: boolean
 }

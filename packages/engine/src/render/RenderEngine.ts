@@ -1,5 +1,5 @@
 import { makeObservable } from 'mobx'
-import type { IDataRenderer, FieldDefinition as DataFieldDefinition } from './dataTypes'
+import type { IDataRenderer } from './dataTypes'
 import type { IViewRenderer, ViewDefinition } from './viewTypes'
 import type { IActionRenderer, ActionDefinition, ServerActionDefinition, ViewActionDefinition } from './actionTypes'
 import type {
@@ -10,7 +10,10 @@ import type {
   IGroupRenderer,
   IFieldRenderer,
   GroupDefinition,
-  FieldDefinition
+  FieldDefinition,
+  FieldRenderData,
+  FieldRenderContext,
+  DataDefinition
 } from './types'
 import { ViewStack, type IViewStack } from './ViewStack'
 import { ActionQueue, type IActionQueue, type ActionQueueConfig } from './ActionQueue'
@@ -149,21 +152,21 @@ export class RenderEngine {
    * 渲染数据字段
    */
   renderData(
+    definition: DataDefinition,
     value: any,
-    field: FieldDefinition,
     context: RenderContext,
     mode: 'view' | 'edit' = 'view'
   ): RenderDescriptor {
-    const renderer = this.getDataRenderer(field.type)
+    const renderer = this.getDataRenderer(definition.type)
     if (!renderer) {
-      throw new Error(`No data renderer found for type "${field.type}"`)
+      throw new Error(`No data renderer found for type "${definition.type}"`)
     }
 
     if (mode === 'edit' && renderer.renderEdit) {
-      return renderer.renderEdit(value, field, context)
+      return renderer.renderEdit(definition, value, context)
     }
 
-    return renderer.render(value, field, context)
+    return renderer.render(definition, value, context)
   }
 
   /**
@@ -188,19 +191,8 @@ export class RenderEngine {
       throw new Error(`No action renderer found for type "${actionType}"`)
     }
 
-    // 优先使用统一的 render 方法
-    if (renderer.render) {
-      return renderer.render(action, context)
-    }
-
-    // 向后兼容：使用旧的 renderServer/renderView 方法
-    if (action.type === 'server' && renderer.renderServer) {
-      return renderer.renderServer(action as ServerActionDefinition, context)
-    } else if (action.type === 'view' && renderer.renderView) {
-      return renderer.renderView(action as ViewActionDefinition, context)
-    }
-
-    throw new Error(`Action renderer for type "${actionType}" does not support action type "${action.type}"`)
+    // 使用统一的 render 方法
+    return renderer.render(action, {}, context)
   }
 
   /**
@@ -230,7 +222,19 @@ export class RenderEngine {
       throw new Error(`No field renderer found for layout "${layoutType}"`)
     }
 
-    return renderer.render(field, value, record, context)
+    // 构建符合新接口的数据结构
+    const fieldData: FieldRenderData = {
+      value,
+      record,
+      fieldPath: field.name
+    }
+
+    const fieldContext: FieldRenderContext = {
+      ...context,
+      mode: context.mode || 'view'
+    }
+
+    return renderer.render(field, fieldData, fieldContext)
   }
 
   // ========== 管理方法 ==========
