@@ -1,6 +1,9 @@
 import type { Preview } from '@storybook/react'
 import { themes } from '@storybook/theming'
 
+// 导入 theme 的全局样式
+import '@schema-component/theme/styles/globals.css'
+
 const preview: Preview = {
   // 全局参数
   parameters: {
