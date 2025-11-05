@@ -1,5 +1,6 @@
 {
-  "buildCommand": "pnpm -w run build:ci && pnpm --filter storybook build",
+  "buildCommand": "pnpm -r --workspace-concurrency=1 run build && pnpm --filter storybook build",
   "outputDirectory": "packages/storybook/dist",
-  "installCommand": "pnpm install"
+  "installCommand": "pnpm install",
+  "framework": null
 }
