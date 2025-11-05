@@ -141,9 +141,9 @@ export function useModelAction(
         } else if (action.type === 'view') {
           // ViewAction 直接执行 handler
           const viewAction = action as ViewActionDefinition
-          result = await viewAction.handler({ model: null, modelName: '', data: {} })
+          result = await viewAction.handler({ model: null, modelName: '', data: {} } as any)
         } else {
-          throw new Error(`Unknown action type: ${action.type}`)
+          throw new Error(`Unknown action type: ${(action as any).type}`)
         }
 
         // 设置成功状态
