@@ -95,7 +95,7 @@ export const DetailView = memo(function DetailView({
       {
         ...fieldDef,
         name: fieldName,
-      },
+      } as any,
       data[fieldName]
     )
 

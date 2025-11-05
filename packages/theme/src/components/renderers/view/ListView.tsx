@@ -96,7 +96,7 @@ export const ListView = memo(function ListView({
       {
         ...fieldDef,
         name: fieldName,
-      },
+      } as any,
       item[fieldName]
     )
 
