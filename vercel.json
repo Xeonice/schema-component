@@ -1,6 +1,5 @@
 {
-  "buildCommand": "pnpm --filter storybook... run build",
+  "buildCommand": "bash build-storybook.sh",
   "outputDirectory": "packages/storybook/dist",
-  "installCommand": "pnpm install --frozen-lockfile",
   "framework": null
 }
