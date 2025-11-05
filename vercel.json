@@ -1,6 +1,6 @@
 {
-  "buildCommand": "pnpm -r --workspace-concurrency=1 run build && pnpm --filter storybook build",
+  "buildCommand": "pnpm --filter storybook... run build",
   "outputDirectory": "packages/storybook/dist",
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install --frozen-lockfile",
   "framework": null
 }
