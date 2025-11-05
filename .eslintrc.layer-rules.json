@@ -1,0 +1,61 @@
+{
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@schema-component/theme"],
+            "message": "Schema 层不能依赖 Theme 层"
+          },
+          {
+            "group": ["@schema-component/react-connector"],
+            "message": "Schema 层不能依赖 React Connector 层"
+          },
+          {
+            "group": ["@schema-component/engine"],
+            "message": "Schema 层不能依赖 Engine 层"
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["packages/engine/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@schema-component/theme"],
+                "message": "Engine 层不能依赖 Theme 层"
+              },
+              {
+                "group": ["@schema-component/react-connector"],
+                "message": "Engine 层不能依赖 React Connector 层"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/react-connector/**/*"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@schema-component/theme"],
+                "message": "React Connector 层不能依赖 Theme 层"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
