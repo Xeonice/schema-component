@@ -36,7 +36,7 @@ export function FieldRenderer(props: FieldRendererProps) {
  * Default field renderer
  * Shows label and data renderer
  */
-function DefaultFieldRenderer({
+export function DefaultFieldRenderer({
   field,
   fieldDef,
   value,

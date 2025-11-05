@@ -186,8 +186,19 @@ export class ActionQueue implements IActionQueue {
     this.notifyQueueListeners()
 
     try {
+      // 通过 modelRegistry 动态获取 model（使用 action.modelName）
+      const model = task.context.modelRegistry.get(task.action.modelName)
+      if (!model) {
+        throw new Error(`Model "${task.action.modelName}" not found in registry`)
+      }
+
+      const actionFn = model.actions[task.action.name]
+      if (!actionFn) {
+        throw new Error(`Action "${task.action.name}" not found in model "${task.action.modelName}"`)
+      }
+
       const result = await Promise.race([
-        task.context.model.actions[task.action.name](task.params),
+        actionFn(task.params),
         this.timeout(this.config.timeout)
       ])
 

@@ -1,10 +1,44 @@
 import type { Preview } from '@storybook/react'
 import { themes } from '@storybook/theming'
+import { ThemeProvider, initializeTheme } from '@schema-component/theme'
+import { RenderContextProvider, registerReactComponent } from '@schema-component/react-connector'
+import { createEngineContext, type RenderContext } from '@schema-component/engine'
+import React from 'react'
+
+// 导入统一的模型注册函数
+import { registerDemoModels } from '../stories/models'
 
 // 导入 theme 的全局样式
-import '@schema-component/theme/styles/globals.css'
+// 通过 main.cjs 中的正则 alias 精确匹配到 theme/dist/style.css
+import '@schema-component/theme/style.css'
+
+// 初始化 Theme 渲染器到 Engine
+initializeTheme(registerReactComponent)
+
+// 创建 EngineContext 实例
+const engineContext = createEngineContext({
+  debug: true
+})
+
+// 统一注册所有演示模型
+registerDemoModels(engineContext)
+
+// 使用 EngineContext 创建全局 RenderContext
+// RenderContext 不包含 modelName，支持同时渲染多个不同 Model 的 View
+const renderContext: RenderContext = engineContext.createRenderContext()
 
 const preview: Preview = {
+  // 全局装饰器 - 使用 ThemeProvider 和 RenderContextProvider 包裹所有 stories
+  decorators: [
+    (Story) => (
+      <ThemeProvider>
+        <RenderContextProvider engineContext={renderContext}>
+          <Story />
+        </RenderContextProvider>
+      </ThemeProvider>
+    ),
+  ],
+
   // 全局参数
   parameters: {
     // 操作配置

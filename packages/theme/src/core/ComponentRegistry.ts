@@ -1,3 +1,25 @@
+/**
+ * @deprecated 此模块将在未来版本中移除
+ *
+ * 新架构下应该使用:
+ * - Engine 的 RendererRegistry 注册渲染器
+ * - react-connector 的 registerReactComponent 注册 React 组件
+ * - Theme 的 initializeTheme() 统一初始化
+ *
+ * 迁移指南:
+ * ```typescript
+ * // 旧方式 (将被移除)
+ * import { getRegistry } from '@schema-component/theme'
+ * const registry = getRegistry()
+ * registry.registerViewRenderer('form', { component: FormView })
+ *
+ * // 新方式 (推荐)
+ * import { initializeTheme } from '@schema-component/theme'
+ * import { registerReactComponent } from '@schema-component/react-connector'
+ * initializeTheme(registerReactComponent)
+ * ```
+ */
+
 import type {
   ComponentRegistry,
   RegistryBatch,
@@ -11,6 +33,8 @@ import type {
 /**
  * Default implementation of ComponentRegistry
  * Singleton pattern for managing renderer components
+ *
+ * @deprecated 使用新的注册方式替代
  */
 class ComponentRegistryImpl implements ComponentRegistry {
   private dataRenderers = new Map<string, DataRendererRegistration>()
@@ -168,6 +192,9 @@ let registryInstance: ComponentRegistry | null = null
 
 /**
  * Get the global ComponentRegistry instance
+ *
+ * @deprecated 使用 initializeTheme() 替代
+ * @see {@link initializeTheme}
  */
 export function getRegistry(): ComponentRegistry {
   if (!registryInstance) {
@@ -178,6 +205,8 @@ export function getRegistry(): ComponentRegistry {
 
 /**
  * Reset the global registry (useful for testing)
+ *
+ * @deprecated ComponentRegistry 将被移除
  */
 export function resetRegistry(): void {
   if (registryInstance) {
@@ -188,6 +217,8 @@ export function resetRegistry(): void {
 
 /**
  * Create a new isolated registry instance (useful for testing)
+ *
+ * @deprecated ComponentRegistry 将被移除
  */
 export function createRegistry(): ComponentRegistry {
   return new ComponentRegistryImpl()

@@ -39,6 +39,8 @@ export interface ThemeProviderProps {
   defaultTheme?: Partial<ThemeConfig>
   /** Storage key for persisting theme */
   storageKey?: string
+  /** Auto-initialize renderers (default: true) */
+  autoInitialize?: boolean
   /** Children */
   children: React.ReactNode
 }

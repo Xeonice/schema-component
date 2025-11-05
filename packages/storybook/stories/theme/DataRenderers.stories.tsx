@@ -1,16 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import React from 'react'
-import {
-  DataRenderer,
-  registerRenderers,
-} from '@schema-component/theme'
+import { DataRenderer } from '@schema-component/theme'
 import type { BaseFieldDefinition } from '@schema-component/schema'
 
-// Initialize renderers only once
-if (typeof window !== 'undefined' && !(window as any).__renderersInitialized) {
-  registerRenderers()
-  ;(window as any).__renderersInitialized = true
-}
+// Renderers are registered globally in preview.ts
 
 interface DataRendererDemoProps {
   title: string
@@ -283,8 +276,8 @@ export const RelativeTimeRenderer: Story = {
   args: {
     title: 'Relative Time Renderer',
     description: '相对时间渲染器，显示相对于当前时间的描述（如 "2 hours ago"）。',
-    rendererType: 'relativeTime',
-    field: { type: 'relativeTime' },
+    rendererType: 'relativetime',
+    field: { type: 'relativetime' },
     value: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
   }
 }
@@ -327,8 +320,8 @@ export const KeyValueRenderer: Story = {
   args: {
     title: 'Key-Value Renderer',
     description: '键值对渲染器，以表格形式显示对象的键值对。',
-    rendererType: 'keyValue',
-    field: { type: 'keyValue' },
+    rendererType: 'keyvalue',
+    field: { type: 'keyvalue' },
     value: {
       firstName: 'John',
       lastName: 'Doe',
@@ -371,8 +364,8 @@ export const BelongsToRenderer: Story = {
   args: {
     title: 'BelongsTo Renderer',
     description: '一对一关联渲染器，显示关联的单个对象。',
-    rendererType: 'belongsTo',
-    field: { type: 'belongsTo', options: { target: 'User' } },
+    rendererType: 'belongsto',
+    field: { type: 'belongsto', options: { target: 'User' } },
     value: { id: 1, name: 'John Doe', email: 'john@example.com' }
   }
 }
@@ -381,8 +374,8 @@ export const HasManyRenderer: Story = {
   args: {
     title: 'HasMany Renderer',
     description: '一对多关联渲染器，显示关联的多个对象列表。',
-    rendererType: 'hasMany',
-    field: { type: 'hasMany', options: { target: 'Post' } },
+    rendererType: 'hasmany',
+    field: { type: 'hasmany', options: { target: 'Post' } },
     value: [
       { id: 1, title: 'First Post' },
       { id: 2, title: 'Second Post' },
@@ -395,8 +388,8 @@ export const ManyToManyRenderer: Story = {
   args: {
     title: 'ManyToMany Renderer',
     description: '多对多关联渲染器，显示多对多关联的对象列表。',
-    rendererType: 'manyToMany',
-    field: { type: 'manyToMany', options: { target: 'Tag' } },
+    rendererType: 'manytomany',
+    field: { type: 'manytomany', options: { target: 'Tag' } },
     value: [
       { id: 1, name: 'JavaScript' },
       { id: 2, name: 'React' },

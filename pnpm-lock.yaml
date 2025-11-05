@@ -16,7 +16,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^5.0.0
-        version: 5.4.21
+        version: 5.4.21(@types/node@24.10.0)
       vite-plugin-dts:
         specifier: ^3.7.0
         version: 3.9.1(typescript@5.9.3)(vite@5.4.21)
@@ -42,6 +42,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@types/node':
+        specifier: ^24.10.0
+        version: 24.10.0
       axios-mock-adapter:
         specifier: ^2.1.0
         version: 2.1.0(axios@1.13.1)
@@ -50,13 +53,13 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^5.0.0
-        version: 5.4.21
+        version: 5.4.21(@types/node@24.10.0)
       vite-plugin-dts:
         specifier: ^4.3.0
-        version: 4.5.4(typescript@5.9.3)(vite@5.4.21)
+        version: 4.5.4(@types/node@24.10.0)(typescript@5.9.3)(vite@5.4.21)
       vitest:
         specifier: ^1.0.0
-        version: 1.6.1
+        version: 1.6.1(@types/node@24.10.0)
 
   packages/react-connector:
     dependencies:
@@ -107,6 +110,9 @@ importers:
       '@schema-component/engine':
         specifier: workspace:*
         version: link:../engine
+      '@schema-component/react-connector':
+        specifier: workspace:*
+        version: link:../react-connector
       '@schema-component/schema':
         specifier: workspace:*
         version: link:../schema
@@ -273,10 +279,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^5.0.0
-        version: 5.4.21
+        version: 5.4.21(@types/node@24.10.0)
       vite-plugin-dts:
         specifier: ^4.5.4
-        version: 4.5.4(typescript@5.9.3)(vite@5.4.21)
+        version: 4.5.4(@types/node@24.10.0)(typescript@5.9.3)(vite@5.4.21)
       vitest:
         specifier: ^2.1.4
         version: 2.1.9
@@ -1824,12 +1830,12 @@ packages:
       - '@types/node'
     dev: true
 
-  /@microsoft/api-extractor-model@7.31.3:
+  /@microsoft/api-extractor-model@7.31.3(@types/node@24.10.0):
     resolution: {integrity: sha512-dv4quQI46p0U03TCEpasUf6JrJL3qjMN7JUAobsPElxBv4xayYYvWW9aPpfYV+Jx6hqUcVaLVOeV7+5hxsyoFQ==}
     dependencies:
       '@microsoft/tsdoc': 0.15.1
       '@microsoft/tsdoc-config': 0.17.1
-      '@rushstack/node-core-library': 5.18.0
+      '@rushstack/node-core-library': 5.18.0(@types/node@24.10.0)
     transitivePeerDependencies:
       - '@types/node'
     dev: true
@@ -1855,17 +1861,17 @@ packages:
       - '@types/node'
     dev: true
 
-  /@microsoft/api-extractor@7.53.3:
+  /@microsoft/api-extractor@7.53.3(@types/node@24.10.0):
     resolution: {integrity: sha512-p2HmQaMSVqMBj3bH3643f8xApKAqrF1jNpPsMCTQOYCYgfwLnvzsve8c+bgBWzCOBBgLK54PB6ZLIWMGLg8CZA==}
     hasBin: true
     dependencies:
-      '@microsoft/api-extractor-model': 7.31.3
+      '@microsoft/api-extractor-model': 7.31.3(@types/node@24.10.0)
       '@microsoft/tsdoc': 0.15.1
       '@microsoft/tsdoc-config': 0.17.1
-      '@rushstack/node-core-library': 5.18.0
+      '@rushstack/node-core-library': 5.18.0(@types/node@24.10.0)
       '@rushstack/rig-package': 0.6.0
-      '@rushstack/terminal': 0.19.3
-      '@rushstack/ts-command-line': 5.1.3
+      '@rushstack/terminal': 0.19.3(@types/node@24.10.0)
+      '@rushstack/ts-command-line': 5.1.3(@types/node@24.10.0)
       lodash: 4.17.21
       minimatch: 10.0.3
       resolve: 1.22.11
@@ -3139,7 +3145,7 @@ packages:
       z-schema: 5.0.5
     dev: true
 
-  /@rushstack/node-core-library@5.18.0:
+  /@rushstack/node-core-library@5.18.0(@types/node@24.10.0):
     resolution: {integrity: sha512-XDebtBdw5S3SuZIt+Ra2NieT8kQ3D2Ow1HxhDQ/2soinswnOu9e7S69VSwTOLlQnx5mpWbONu+5JJjDxMAb6Fw==}
     peerDependencies:
       '@types/node': '*'
@@ -3147,6 +3153,7 @@ packages:
       '@types/node':
         optional: true
     dependencies:
+      '@types/node': 24.10.0
       ajv: 8.13.0
       ajv-draft-04: 1.0.0(ajv@8.13.0)
       ajv-formats: 3.0.1(ajv@8.13.0)
@@ -3157,13 +3164,15 @@ packages:
       semver: 7.5.4
     dev: true
 
-  /@rushstack/problem-matcher@0.1.1:
+  /@rushstack/problem-matcher@0.1.1(@types/node@24.10.0):
     resolution: {integrity: sha512-Fm5XtS7+G8HLcJHCWpES5VmeMyjAKaWeyZU5qPzZC+22mPlJzAsOxymHiWIfuirtPckX3aptWws+K2d0BzniJA==}
     peerDependencies:
       '@types/node': '*'
     peerDependenciesMeta:
       '@types/node':
         optional: true
+    dependencies:
+      '@types/node': 24.10.0
     dev: true
 
   /@rushstack/rig-package@0.5.2:
@@ -3192,7 +3201,7 @@ packages:
       supports-color: 8.1.1
     dev: true
 
-  /@rushstack/terminal@0.19.3:
+  /@rushstack/terminal@0.19.3(@types/node@24.10.0):
     resolution: {integrity: sha512-0P8G18gK9STyO+CNBvkKPnWGMxESxecTYqOcikHOVIHXa9uAuTK+Fw8TJq2Gng1w7W6wTC9uPX6hGNvrMll2wA==}
     peerDependencies:
       '@types/node': '*'
@@ -3200,8 +3209,9 @@ packages:
       '@types/node':
         optional: true
     dependencies:
-      '@rushstack/node-core-library': 5.18.0
-      '@rushstack/problem-matcher': 0.1.1
+      '@rushstack/node-core-library': 5.18.0(@types/node@24.10.0)
+      '@rushstack/problem-matcher': 0.1.1(@types/node@24.10.0)
+      '@types/node': 24.10.0
       supports-color: 8.1.1
     dev: true
 
@@ -3216,10 +3226,10 @@ packages:
       - '@types/node'
     dev: true
 
-  /@rushstack/ts-command-line@5.1.3:
+  /@rushstack/ts-command-line@5.1.3(@types/node@24.10.0):
     resolution: {integrity: sha512-Kdv0k/BnnxIYFlMVC1IxrIS0oGQd4T4b7vKfx52Y2+wk2WZSDFIvedr7JrhenzSlm3ou5KwtoTGTGd5nbODRug==}
     dependencies:
-      '@rushstack/terminal': 0.19.3
+      '@rushstack/terminal': 0.19.3(@types/node@24.10.0)
       '@types/argparse': 1.0.38
       argparse: 1.0.10
       string-argv: 0.3.2
@@ -4083,6 +4093,12 @@ packages:
     resolution: {integrity: sha512-hov8bUuiLiyFPGyFPE1lwWhmzYbirOXQNNo40+y3zow8aFVTeyn3VWL0VFFfdNddA8S4Vf0Tc062rzyNr7Paag==}
     dev: true
 
+  /@types/node@24.10.0:
+    resolution: {integrity: sha512-qzQZRBqkFsYyaSWXuEHc2WR9c0a0CXwiE5FWUvn7ZM+vdy1uZLfCunD38UzhuB7YN/J11ndbDBcTmOdxJo9Q7A==}
+    dependencies:
+      undici-types: 7.16.0
+    dev: true
+
   /@types/node@24.9.2:
     resolution: {integrity: sha512-uWN8YqxXxqFMX2RqGOrumsKeti4LlmIMIyV0lgut4jx7KQBcBiW6vkDtIBvHnHIquwNfJhk8v2OtmO8zXWHfPA==}
     dependencies:
@@ -4153,7 +4169,7 @@ packages:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -4215,7 +4231,7 @@ packages:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
     dev: true
 
   /@vitest/pretty-format@2.0.5:
@@ -10703,7 +10719,7 @@ packages:
     engines: {node: '>= 0.10'}
     dev: true
 
-  /vite-node@1.6.1:
+  /vite-node@1.6.1(@types/node@24.10.0):
     resolution: {integrity: sha512-YAXkfvGtuTzwWbDSACdJSg4A4DZiAqckWe90Zapc/sEX3XvHcw1NdurM/6od8J207tSDqNbSsgdCacBgvJKFuA==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -10712,7 +10728,7 @@ packages:
       debug: 4.4.3
       pathe: 1.1.2
       picocolors: 1.1.1
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -10734,7 +10750,7 @@ packages:
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 1.1.2
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -10789,7 +10805,7 @@ packages:
       kolorist: 1.8.0
       magic-string: 0.30.21
       typescript: 5.9.3
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
       vue-tsc: 1.8.27(typescript@5.9.3)
     transitivePeerDependencies:
       - '@types/node'
@@ -10797,7 +10813,7 @@ packages:
       - supports-color
     dev: true
 
-  /vite-plugin-dts@4.5.4(typescript@5.9.3)(vite@5.4.21):
+  /vite-plugin-dts@4.5.4(@types/node@24.10.0)(typescript@5.9.3)(vite@5.4.21):
     resolution: {integrity: sha512-d4sOM8M/8z7vRXHHq/ebbblfaxENjogAAekcfcDCCwAyvGqnPrc7f4NZbvItS+g4WTgerW0xDwSz5qz11JT3vg==}
     peerDependencies:
       typescript: '*'
@@ -10806,7 +10822,7 @@ packages:
       vite:
         optional: true
     dependencies:
-      '@microsoft/api-extractor': 7.53.3
+      '@microsoft/api-extractor': 7.53.3(@types/node@24.10.0)
       '@rollup/pluginutils': 5.3.0
       '@volar/typescript': 2.4.23
       '@vue/language-core': 2.2.0(typescript@5.9.3)
@@ -10816,7 +10832,7 @@ packages:
       local-pkg: 1.1.2
       magic-string: 0.30.21
       typescript: 5.9.3
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
     transitivePeerDependencies:
       - '@types/node'
       - rollup
@@ -10858,7 +10874,7 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vite@5.4.21:
+  /vite@5.4.21(@types/node@24.10.0):
     resolution: {integrity: sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -10889,6 +10905,7 @@ packages:
       terser:
         optional: true
     dependencies:
+      '@types/node': 24.10.0
       esbuild: 0.21.5
       postcss: 8.5.6
       rollup: 4.52.5
@@ -10946,7 +10963,7 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vitest@1.6.1:
+  /vitest@1.6.1(@types/node@24.10.0):
     resolution: {integrity: sha512-Ljb1cnSJSivGN0LqXd/zmDbWEM0RNNg2t1QW/XUhYl/qPqyu7CsqeWtqQXHVaJsecLPuDoak2oJcZN2QoRIOag==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -10971,6 +10988,7 @@ packages:
       jsdom:
         optional: true
     dependencies:
+      '@types/node': 24.10.0
       '@vitest/expect': 1.6.1
       '@vitest/runner': 1.6.1
       '@vitest/snapshot': 1.6.1
@@ -10988,8 +11006,8 @@ packages:
       strip-literal: 2.1.1
       tinybench: 2.9.0
       tinypool: 0.8.4
-      vite: 5.4.21
-      vite-node: 1.6.1
+      vite: 5.4.21(@types/node@24.10.0)
+      vite-node: 1.6.1(@types/node@24.10.0)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - less
@@ -11044,7 +11062,7 @@ packages:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 5.4.21
+      vite: 5.4.21(@types/node@24.10.0)
       vite-node: 2.1.9
       why-is-node-running: 2.3.0
     transitivePeerDependencies:

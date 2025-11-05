@@ -7,15 +7,10 @@ import {
   AccordionGroupRenderer,
   CardGroupRenderer,
   FieldRenderer,
-  registerRenderers,
 } from '@schema-component/theme'
 import type { GroupDefinition } from '@schema-component/engine'
 
-// Initialize renderers only once
-if (typeof window !== 'undefined' && !(window as any).__renderersInitialized) {
-  registerRenderers()
-  ;(window as any).__renderersInitialized = true
-}
+// Renderers are registered globally in preview.ts
 
 interface GroupRendererDemoProps {
   title: string
@@ -38,21 +33,20 @@ const GroupRendererDemo: React.FC<GroupRendererDemoProps> = ({
   groupType,
   groups
 }) => {
-  const [formData, setFormData] = React.useState<Record<string, any>>(() => {
-    const initial: Record<string, any> = {}
-    groups.forEach(({ fields }) => {
-      fields.forEach(field => {
-        initial[field.name] = field.value
-      })
+  const schema = { name: 'Demo', fields: {} }
+
+  // Compute form data directly from props
+  const formData: Record<string, any> = {}
+  groups.forEach(({ fields }) => {
+    fields.forEach(field => {
+      formData[field.name] = field.value
     })
-    return initial
   })
 
-  const handleFieldChange = (fieldName: string, value: any) => {
-    setFormData(prev => ({ ...prev, [fieldName]: value }))
+  // No-op change handler
+  const handleFieldChange = () => {
+    // Intentionally empty
   }
-
-  const schema = { name: 'Demo', fields: {} }
 
   const GroupComponent = groupType === 'stack'
     ? StackGroupRenderer

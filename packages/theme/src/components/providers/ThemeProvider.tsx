@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { ThemeConfig, ThemeMode, ThemeContextValue, ThemeProviderProps } from '../../types'
+import { registerRenderers } from '../renderers/registerRenderers'
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
@@ -7,6 +8,9 @@ const DEFAULT_THEME: ThemeConfig = {
   mode: 'system',
   radius: 0.5,
 }
+
+// 全局标志,确保只初始化一次
+let isInitialized = false
 
 /**
  * ThemeProvider component
@@ -16,6 +20,7 @@ export function ThemeProvider({
   children,
   defaultTheme = {},
   storageKey = 'schema-component-theme',
+  autoInitialize = true, // 新增: 是否自动初始化渲染器
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeConfig>(() => {
     // Try to load from localStorage
@@ -31,6 +36,16 @@ export function ThemeProvider({
     }
     return { ...DEFAULT_THEME, ...defaultTheme }
   })
+
+  // Register all renderers once when the provider mounts
+  useEffect(() => {
+    if (autoInitialize && !isInitialized) {
+      isInitialized = true
+      // 暂时保留旧的注册方式,确保向后兼容
+      // 新架构下应该在应用启动时手动调用 initializeTheme
+      registerRenderers()
+    }
+  }, [autoInitialize])
 
   // Persist theme to localStorage
   useEffect(() => {

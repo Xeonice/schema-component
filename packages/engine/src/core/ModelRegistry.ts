@@ -7,10 +7,28 @@ import type { IModel } from './defineModel'
 import { getEventBus } from '../event/EventBus'
 
 /**
+ * Model 注册表接口
+ * 定义 Model 注册表的核心能力
+ */
+export interface IModelRegistry {
+  register(model: IModel): void
+  get(name: string): IModel | undefined
+  has(name: string): boolean
+  unregister(name: string): boolean
+  getAll(): IModel[]
+  getAllNames(): string[]
+  count(): number
+  clear(): void
+  registerMany(models: IModel[]): void
+  find(predicate: (model: IModel) => boolean): IModel[]
+  findOne(predicate: (model: IModel) => boolean): IModel | undefined
+}
+
+/**
  * Model 注册表类
  * 使用单例模式管理全局的 Model 注册
  */
-export class ModelRegistry {
+export class ModelRegistry implements IModelRegistry {
   private static instance: ModelRegistry
   private models: Map<string, IModel> = new Map()
 

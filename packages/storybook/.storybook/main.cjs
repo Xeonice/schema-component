@@ -39,13 +39,34 @@ const config = {
   async viteFinal(config) {
     return mergeConfig(config, {
       resolve: {
-        alias: {
-          '@schema-component/schema': path.resolve(__dirname, '../../schema/src'),
-          '@schema-component/engine': path.resolve(__dirname, '../../engine/src'),
-          '@schema-component/theme': path.resolve(__dirname, '../../theme/src'),
-          '@schema-component/react-connector': path.resolve(__dirname, '../../react-connector/src'),
-          '@': path.resolve(__dirname, '../src')
-        }
+        alias: [
+          // 精确匹配 CSS 导入，指向构建产物
+          {
+            find: /^@schema-component\/theme\/style\.css$/,
+            replacement: path.resolve(__dirname, '../../theme/dist/style.css')
+          },
+          // 其他导入指向源码
+          {
+            find: '@schema-component/schema',
+            replacement: path.resolve(__dirname, '../../schema/src')
+          },
+          {
+            find: '@schema-component/engine',
+            replacement: path.resolve(__dirname, '../../engine/src')
+          },
+          {
+            find: '@schema-component/theme',
+            replacement: path.resolve(__dirname, '../../theme/src')
+          },
+          {
+            find: '@schema-component/react-connector',
+            replacement: path.resolve(__dirname, '../../react-connector/src')
+          },
+          {
+            find: '@',
+            replacement: path.resolve(__dirname, '../src')
+          }
+        ]
       },
       define: {
         'process.env': {}

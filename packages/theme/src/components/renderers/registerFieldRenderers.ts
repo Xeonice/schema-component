@@ -1,6 +1,6 @@
 import { getRegistry } from '../../core'
 import {
-  FieldRenderer,
+  DefaultFieldRenderer,
   HorizontalFieldRenderer,
   InlineFieldRenderer,
 } from './field'
@@ -13,7 +13,7 @@ export function registerFieldRenderers() {
 
   // Default field renderer (vertical layout with label on top)
   registry.registerFieldRenderer('default', {
-    component: FieldRenderer,
+    component: DefaultFieldRenderer,
     displayName: 'Default',
   })
 

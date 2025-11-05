@@ -30,6 +30,12 @@ export * from './actions'
 // Hooks exports
 export * from './hooks'
 
+// Adapter exports (新增: 用于将渲染器注册到 Engine)
+export * from './adapters'
+
+// Initialization
+export { initializeTheme } from './init'
+
 // Styles
 import './styles/globals.css'
 

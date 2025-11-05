@@ -4,15 +4,10 @@ import {
   FieldRenderer,
   HorizontalFieldRenderer,
   InlineFieldRenderer,
-  registerRenderers,
 } from '@schema-component/theme'
 import type { FieldRendererProps } from '@schema-component/theme'
 
-// Initialize renderers only once
-if (typeof window !== 'undefined' && !(window as any).__renderersInitialized) {
-  registerRenderers()
-  ;(window as any).__renderersInitialized = true
-}
+// Renderers are registered globally in preview.ts
 
 interface FieldRendererDemoProps {
   title: string
@@ -27,19 +22,12 @@ const FieldRendererDemo: React.FC<FieldRendererDemoProps> = ({
   layoutType,
   fields
 }) => {
-  const [formData, setFormData] = React.useState<Record<string, any>>(() => {
-    const initial: Record<string, any> = {}
-    fields.forEach(field => {
-      initial[field.field.name] = field.value
-    })
-    return initial
-  })
-
-  const handleFieldChange = (fieldName: string, value: any) => {
-    setFormData(prev => ({ ...prev, [fieldName]: value }))
-  }
-
   const schema = { name: 'Demo', fields: {} }
+
+  // No-op change handler - do nothing on change
+  const handleFieldChange = () => {
+    // Intentionally empty
+  }
 
   return (
     <div style={{ padding: '20px' }}>
@@ -72,7 +60,6 @@ const FieldRendererDemo: React.FC<FieldRendererDemoProps> = ({
                 <Component
                   key={fieldProps.field.name}
                   {...fieldProps}
-                  value={formData[fieldProps.field.name]}
                   schema={schema}
                   mode="view"
                 />
@@ -104,8 +91,7 @@ const FieldRendererDemo: React.FC<FieldRendererDemoProps> = ({
                 <Component
                   key={fieldProps.field.name}
                   {...fieldProps}
-                  value={formData[fieldProps.field.name]}
-                  onChange={(value) => handleFieldChange(fieldProps.field.name, value)}
+                  onChange={handleFieldChange}
                   schema={schema}
                   mode="edit"
                 />
@@ -126,7 +112,7 @@ const FieldRendererDemo: React.FC<FieldRendererDemoProps> = ({
           overflow: 'auto',
           fontSize: '13px'
         }}>
-          {JSON.stringify(formData, null, 2)}
+          {JSON.stringify(fields.reduce((acc, f) => ({ ...acc, [f.field.name]: f.value }), {}), null, 2)}
         </pre>
       </div>
     </div>
@@ -485,10 +471,10 @@ export const MixedFieldTypes: Story = {
       {
         field: {
           name: 'author',
-          type: 'belongsTo',
+          type: 'belongsto',
           label: 'Author'
         },
-        fieldDef: { type: 'belongsTo', options: { target: 'User' } },
+        fieldDef: { type: 'belongsto', options: { target: 'User' } },
         value: { id: 1, name: 'John Doe' }
       },
       {

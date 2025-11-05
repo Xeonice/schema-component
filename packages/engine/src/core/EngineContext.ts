@@ -6,6 +6,9 @@
 import { Container } from '../di/Container'
 import { TYPES } from '../di/types'
 import { getEventBus, EventBus } from '../event/EventBus'
+import { getModelRegistry, registerModel as registerModelToRegistry } from './ModelRegistry'
+import { ViewStack } from '../render/ViewStack'
+import { ActionQueue } from '../render/ActionQueue'
 
 // 声明全局类型以避免 Node.js/Browser 环境冲突
 declare const console: {
@@ -13,7 +16,6 @@ declare const console: {
   log: (message?: any, ...optionalParams: any[]) => void
   error: (message?: any, ...optionalParams: any[]) => void
 }
-declare const require: (id: string) => any
 
 /**
  * Engine 配置接口
@@ -120,8 +122,7 @@ export class EngineContext {
    * @param model Model 实例
    */
   registerModel(model: any): void {
-    const { registerModel: register } = require('./ModelRegistry')
-    register(model)
+    registerModelToRegistry(model)
   }
 
   /**
@@ -130,8 +131,8 @@ export class EngineContext {
    * @returns Model 实例
    */
   getModel(modelName: string): any {
-    const { getModel: get } = require('./ModelRegistry')
-    return get(modelName)
+    const registry = getModelRegistry()
+    return registry.get(modelName)
   }
 
   /**
@@ -242,6 +243,51 @@ export class EngineContext {
    */
   setConfig(key: string, value: any): void {
     this.config[key] = value
+  }
+
+  /**
+   * 创建 RenderContext
+   * 统一的 RenderContext 创建入口
+   *
+   * 设计原则：
+   * - RenderContext 是全局的、与特定 model 无关的上下文
+   * - modelName 应该在 ViewDefinition/ActionDefinition 中指定
+   * - 支持一个页面同时渲染多个不同 Model 的 View
+   *
+   * @param options 创建选项
+   * @param options.record 单条记录数据（可选）
+   * @param options.records 多条记录数据（可选）
+   * @param options.uiControllers UI 控制器（modal、drawer、message、navigate）
+   * @returns RenderContext 实例
+   */
+  createRenderContext(options?: {
+    record?: any
+    records?: any[]
+    viewStack?: any
+    actionQueue?: any
+    uiControllers?: {
+      modal?: any
+      drawer?: any
+      message?: any
+      navigate?: (path: string) => void
+    }
+    [key: string]: any
+  }): any {
+    const modelRegistry = getModelRegistry()
+
+    // 允许传入自定义的 viewStack 和 actionQueue，否则创建新实例
+    const viewStack = options?.viewStack || new ViewStack()
+    const actionQueue = options?.actionQueue || new ActionQueue()
+
+    return {
+      modelRegistry,
+      record: options?.record,
+      records: options?.records,
+      viewStack,
+      actionQueue,
+      ...options?.uiControllers,
+      ...options
+    }
   }
 }
 
