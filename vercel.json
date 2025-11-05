@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm -w run build:ci && cd packages/storybook && pnpm run build",
+  "buildCommand": "pnpm -w run build:ci && pnpm -w run build-storybook",
   "outputDirectory": "packages/storybook/dist",
   "installCommand": "pnpm install"
 }
