@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install && pnpm --filter @schema-component/schema run build && pnpm --filter @schema-component/engine run build && pnpm --filter @schema-component/react-connector run build && pnpm --filter @schema-component/theme run build && pnpm --filter @schema-component/storybook run build",
+  "buildCommand": "pnpm run build:ci",
   "outputDirectory": "packages/storybook/dist",
   "installCommand": "pnpm install"
 }
