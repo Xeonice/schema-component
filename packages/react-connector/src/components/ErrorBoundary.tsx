@@ -75,7 +75,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 
     // 在开发模式下输出错误
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('[ErrorBoundary] Caught error:', error, errorInfo)
     }
   }
@@ -120,7 +120,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>
             {this.state.error.message}
           </p>
-          {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+          {import.meta.env.DEV && this.state.errorInfo && (
             <details style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
               <summary style={{ cursor: 'pointer', marginBottom: '10px' }}>
                 查看详细信息
@@ -177,7 +177,7 @@ export const RenderErrorBoundary: React.FC<RenderErrorBoundaryProps> = ({
       )}
       onError={(error, errorInfo) => {
         // 可以在这里上报错误到监控系统
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.error(`[RenderErrorBoundary] ${componentName} error:`, error, errorInfo)
         }
       }}

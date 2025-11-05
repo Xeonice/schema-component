@@ -177,7 +177,7 @@ export function useModelAction(
         }
 
         // 在开发模式下输出错误
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.error('[useModelAction] Error executing action:', err)
         }
 
