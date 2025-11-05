@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install && pnpm -r --filter './packages/{schema,engine,react-connector,theme}' run build && pnpm --filter storybook build",
+  "buildCommand": "pnpm install && pnpm build",
   "outputDirectory": "packages/storybook/dist",
   "installCommand": "pnpm install"
 }
