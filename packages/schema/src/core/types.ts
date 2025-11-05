@@ -54,6 +54,8 @@ export interface BaseFieldOptions {
   index?: boolean
   /** 是否可为null */
   nullable?: boolean
+  /** 字段显示标签 */
+  label?: string
   /** 字段说明 */
   description?: string
   /** 自定义验证消息 */

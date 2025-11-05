@@ -185,7 +185,7 @@ export const TableView = memo(function TableView({
           <TableRow>
             {fields.map((fieldName: string) => {
               const fieldDef = schema?.fields?.[fieldName]
-              const label = fieldDef?.label || fieldDef?.description || fieldName
+              const label = fieldDef?.options?.label || fieldDef?.options?.description || fieldName
               return <TableHead key={fieldName}>{label}</TableHead>
             })}
             {rowActions.length > 0 && <TableHead className="w-[120px]">Actions</TableHead>}
@@ -223,7 +223,7 @@ export const TableView = memo(function TableView({
                 {rowActions.length > 0 && (
                   <TableCell>
                     <div className="flex gap-2">
-                      {rowActions.map((action, actionIndex) => (
+                      {rowActions.map((action: any, actionIndex: number) => (
                         <ActionRenderer
                           key={actionIndex}
                           action={action}

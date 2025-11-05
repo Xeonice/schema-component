@@ -114,6 +114,8 @@ export interface ViewRendererProps extends RendererContext {
   onChange?: (data: any) => void
   /** Actions */
   actions?: ActionDefinition[]
+  /** Action execution handler */
+  onAction?: (actionName: string) => void
 }
 
 /**

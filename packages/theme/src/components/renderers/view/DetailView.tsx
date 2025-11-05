@@ -88,14 +88,13 @@ export const DetailView = memo(function DetailView({
     }
 
     // 使用 label、description 或 fieldName 作为标签
-    const label = fieldDef.label || fieldDef.description || fieldName
+    const label = fieldDef.options?.label || fieldDef.options?.description || fieldName
 
     // 使用 context.renderData 渲染字段值
     const fieldElement = context.renderData(
       {
+        ...fieldDef,
         name: fieldName,
-        type: fieldDef.type,
-        ...fieldDef
       },
       data[fieldName]
     )
