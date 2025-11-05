@@ -1,5 +1,6 @@
 {
-  "buildCommand": "bash build-storybook.sh",
-  "outputDirectory": "packages/storybook/dist",
+  "buildCommand": "pnpm build:ci",
+  "outputDirectory": "/packages/storybook/dist",
+  "installCommand": "pnpm install",
   "framework": null
 }

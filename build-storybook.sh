@@ -7,8 +7,9 @@ echo "Node version: $(node --version)"
 echo "pnpm version: $(pnpm --version)"
 
 echo ""
-echo "=== Installing dependencies ==="
-pnpm install --frozen-lockfile
+echo "=== Verifying dependencies ==="
+echo "Checking if node_modules exists..."
+ls -d node_modules packages/*/node_modules 2>/dev/null || echo "Some node_modules directories missing"
 
 echo ""
 echo "=== Building storybook and dependencies ==="
