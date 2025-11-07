@@ -1,4 +1,4 @@
-import type { IModel } from '../core/defineModel'
+import type { IModelRegistry } from '../core/ModelRegistry'
 import type { IViewStack } from './ViewStack'
 import type { IActionQueue } from './ActionQueue'
 
@@ -28,17 +28,22 @@ export interface RenderDescriptor {
 
 /**
  * 渲染上下文
+ *
+ * 设计原则：
+ * - RenderContext 是全局的、与特定 model 无关的上下文
+ * - 支持一个页面同时渲染多个不同 Model 的 View
+ * - modelName 应该在 ViewDefinition/ActionDefinition 中指定，而不是在 context 中
+ * - 渲染器通过 context.modelRegistry.get(definition.modelName) 获取对应的 model
  */
 export interface RenderContext {
-  // Model 信息
-  modelName: string
-  model: IModel
+  // 全局 Model 注册表
+  modelRegistry: IModelRegistry
 
-  // 数据
+  // 数据（可选，用于传递全局数据）
   record?: any
   records?: any[]
 
-  // Engine 提供的状态（Action 专属）
+  // Engine 提供的全局状态
   viewStack: IViewStack
   actionQueue: IActionQueue
 

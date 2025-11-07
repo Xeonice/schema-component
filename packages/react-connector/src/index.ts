@@ -9,6 +9,37 @@ export {
   type IRenderDescriptorConverter
 } from './context/RenderContext'
 
+// Hooks
+export {
+  useModelData,
+  useModelAction,
+  type UseModelDataOptions,
+  type UseModelDataResult,
+  type UseModelActionOptions,
+  type UseModelActionResult,
+  type ActionExecutionState,
+  type ExtendedActionDefinition
+} from './hooks'
+
+// Components
+export {
+  ErrorBoundary,
+  RenderErrorBoundary,
+  type ErrorBoundaryProps,
+  type RenderErrorBoundaryProps
+} from './components'
+
+// Converters
+export {
+  descriptorToReact,
+  descriptorsToReact,
+  registerReactComponent,
+  registerReactComponents,
+  getReactComponent,
+  clearReactComponents,
+  type ComponentMap,
+} from './converters'
+
 // Re-export Engine types for convenience
 export type {
   RenderViewDefinition as ViewDefinition,

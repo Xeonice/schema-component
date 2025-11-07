@@ -10,7 +10,8 @@ import type {
   DataDefinition,
   RenderDescriptor
 } from '@schema-component/engine'
-import { RenderEngine } from '@schema-component/engine'
+import { RenderEngine, RendererRegistry } from '@schema-component/engine'
+import { descriptorToReact } from '../converters/descriptorToReact'
 
 /**
  * API 层接口
@@ -101,24 +102,23 @@ class ApiLayer implements IApiLayer {
 
 /**
  * RenderDescriptor 转换器实现
+ * 使用新的 descriptorToReact 转换器
  */
 class RenderDescriptorConverter implements IRenderDescriptorConverter {
   convert(descriptor: RenderDescriptor): React.ReactElement {
-    const { component, props = {}, children, key } = descriptor
+    // 使用新的 descriptorToReact 转换器
+    const result = descriptorToReact(descriptor)
 
-    // 递归转换子元素
-    const reactChildren = children?.map((child, index) => {
-      if (typeof child === 'string') {
-        return child
-      }
-      return this.convert({
-        ...child,
-        key: child.key ?? index
-      })
-    })
+    // 确保返回类型正确
+    if (typeof result === 'string') {
+      return React.createElement('span', {}, result)
+    }
 
-    // 创建 React 元素
-    return React.createElement(component, { key, ...props }, ...reactChildren || [])
+    if (!result) {
+      return React.createElement('div', {}, 'Renderer returned null')
+    }
+
+    return result
   }
 }
 
@@ -134,10 +134,26 @@ class ReactRenderContext implements IReactRenderContext {
     this.converter = new RenderDescriptorConverter()
   }
 
-  renderView(view: ViewDefinition, options?: { id?: string | number; params?: any }): React.ReactElement {
+  renderView(view: ViewDefinition, options?: any): React.ReactElement {
     // 直接调用 Engine 的渲染方法
     const renderEngine = RenderEngine.getInstance()
-    const descriptor = renderEngine.renderView(view, {}, this.engineContext)
+
+    // 从 options 中提取 data 和其他参数
+    const { data, schema, model, modelName, onChange, onAction, ...restOptions } = options || {}
+
+    // 将 schema、model 和其他回调函数添加到 context 中
+    const enhancedContext = {
+      ...this.engineContext,
+      schema,
+      model,  // 设置当前模型
+      modelName,  // 设置模型名称
+      onChange,
+      onAction,
+      ...restOptions
+    }
+
+    // 传递 data 作为第二个参数，context 作为第三个参数
+    const descriptor = renderEngine.renderView(view, data, enhancedContext)
     return this.converter.convert(descriptor)
   }
 
@@ -155,7 +171,8 @@ class ReactRenderContext implements IReactRenderContext {
       mode: context?.mode || 'view',
       required: context?.required || field.required,
       disabled: context?.disabled || false,
-      errors: context?.errors || []
+      errors: context?.errors || [],
+      record: data.record
     }
 
     // 直接调用 Engine 的渲染方法

@@ -20,8 +20,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@schema-component/schema": "workspace:*",
     "@schema-component/engine": "workspace:*",
+    "@schema-component/react-connector": "workspace:*",
+    "@schema-component/schema": "workspace:*",
     "@schema-component/theme": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

@@ -7,7 +7,8 @@
     "declarationMap": true,
     "jsx": "react-jsx",
     "lib": ["DOM", "ES2020"],
-    "target": "ES2020"
+    "target": "ES2020",
+    "types": ["vite/client"]
   },
   "include": [
     "src/**/*"

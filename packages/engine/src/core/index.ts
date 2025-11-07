@@ -18,6 +18,7 @@ export type { IModel } from './defineModel'
 
 // Model Registry
 export { ModelRegistry, getModelRegistry, registerModel, getModel, hasModel } from './ModelRegistry'
+export type { IModelRegistry } from './ModelRegistry'
 
 // Model Executor
 export { ModelExecutor, executeAction, executeMethod, callApi } from './ModelExecutor'

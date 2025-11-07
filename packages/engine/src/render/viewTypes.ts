@@ -22,6 +22,8 @@ export interface ColumnDefinition {
  */
 export interface ViewDefinition {
   type: ViewType
+  modelName: string  // View 所属的 Model 名称
+  name: string       // View 的名称
   title?: string
   fields?: string[]
   layout?: string

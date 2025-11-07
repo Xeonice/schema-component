@@ -9,6 +9,7 @@ export interface BaseActionDefinition {
   type: ActionType
   name: string
   label: string
+  modelName: string  // Action 所属的 Model 名称
   icon?: string
   buttonType?: 'primary' | 'default' | 'dashed' | 'text' | 'link'
   disabled?: boolean | ((context: RenderContext) => boolean)
